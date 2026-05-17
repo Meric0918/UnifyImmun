@@ -17,7 +17,7 @@ import pandas as pd
 from typing import Optional, List
 
 # ESM2 model path
-ESM2_MODEL_PATH = "/home/mclab/mjp/model/esm2_t33_650M_UR50D"
+ESM2_MODEL_PATH = "/home/mjp/model/esm2_t33_650M_UR50D"
 
 # Model parameters
 pep_max_len = 15

@@ -23,6 +23,8 @@ _current_dir = os.path.dirname(os.path.abspath(__file__))
 _project_root = os.path.dirname(_current_dir)
 
 
+PYTHON_PATH = "/home/mjp/miniconda3/envs/unifyimmun/bin/python"
+
 def run_phase(script_name, phase_name):
     """Run a training script and report timing."""
     print("\n" + "=" * 60)
@@ -31,7 +33,7 @@ def run_phase(script_name, phase_name):
     start_time = time.time()
 
     result = subprocess.run(
-        ["python", script_name],
+        [PYTHON_PATH, script_name],
         cwd=_current_dir,
         capture_output=False,
     )
