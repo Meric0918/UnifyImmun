@@ -159,7 +159,7 @@ def ensure_dir(path: str):
     os.makedirs(path, exist_ok=True)
 
 
-GLOBAL_LOG_DIR = "/home/mclab/mjp/unifyimmun/logs"
+GLOBAL_LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs")
 
 
 def setup_logger(

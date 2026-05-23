@@ -1,19 +1,19 @@
 python ProbabilityMatrix.py \
-    --peptide-csv /home/mclab/mjp/unifyimmun/data/data_matrix/unique_peptides_full.csv \
-    --cdr3-csv /home/mclab/mjp/unifyimmun/data/data_matrix/cdr3_top10000.csv \
+    --peptide-csv /data/data_matrix/unique_peptides_full.csv \
+    --cdr3-csv /data/data_matrix/cdr3_top10000.csv \
     --output result/probability_matrix.csv \
     --batch-size 1024
 
 python eval_tcr_report.py \
-  --data-path /home/mclab/mjp/unifyimmun/data/LiverCancer/TCR_Peptide.csv \
-  --model-path-template /home/mclab/mjp/unifyimmun/trained_model/TCR_2/model_TCR.pkl \
+  --data-path /data/LiverCancer/TCR_Peptide.csv \
+  --model-path-template /trained_model/TCR_2/model_TCR.pkl \
   --folds 1 \
   --experiment-name liver_cancer_pred
 
 ======================================================================================
 
 # 运行完整训练流程（Phase 1 + Phase 2）
-  cd /home/mclab/mjp/unifyimmun/source
+  cd /source
   python run_all_phases_esm2.py
 
   # 或单独运行某个阶段
@@ -24,7 +24,7 @@ python eval_tcr_report.py \
 
 ======================================================================================
 
-  cd /home/mclab/mjp/unifyimmun/source                                                                                                                                                         
+  cd /source                                                                                                                                                         
                                                                                                                                                                                                  
   # 训练 Round 3 到 Round 5（继续交替训练3轮）                                                                                                                                                   
   python run_all_phases_esm2_iterative.py --start_round 3 --end_round 5                                                                                                                          
@@ -38,20 +38,20 @@ python eval_tcr_report.py \
 =====================================================================================
 
   模型1: TCR_ESM2                                                                                                                                                                                
-cd /home/mclab/mjp/unifyimmun/source         
+cd /source         
 python eval_tcr_report.py \
-  --data-path /home/mclab/mjp/unifyimmun/data/LiverCancer/TCR_Peptide.csv \
-  --model-path-template /home/mclab/mjp/unifyimmun/trained_model/TCR_ESM2/model_TCR_ESM2.pkl \
+  --data-path data/LiverCancer/TCR_Peptide.csv \
+  --model-path-template trained_model/TCR_ESM2/model_TCR_ESM2.pkl \
   --folds 1 \
   --experiment-name TCR_ESM2_LiverCancer \
   --use-esm2
                                                                                                                                                                                                                                                                                                                            
                                                                                                                                                                                                  
   模型2: TCR_ESM2_2                                                                                                                                                                              
-cd /home/mclab/mjp/unifyimmun/source 
-python eval_tcr_report.py \
-  --data-path /home/mclab/mjp/unifyimmun/data/LiverCancer/TCR_Peptide.csv \
-  --model-path-template /home/mclab/mjp/unifyimmun/trained_model/TCR_ESM2_2/model_TCR_ESM2_2.pkl \
+cd /source 
+python /home/mjp/Project/unifyimmun/source/eval_tcr_report.py \
+  --data-path /home/mjp/Project/unifyimmun/data/LiverCancer/TCR_Peptide_balanced.csv \
+  --model-path-template /home/mjp/Project/unifyimmun/trained_model/TCR_ESM2_2/model_TCR_ESM2_2.pkl \
   --folds 1 \
   --experiment-name TCR_ESM2_2_LiverCancer \
   --use-esm2                                                                                                                                                          

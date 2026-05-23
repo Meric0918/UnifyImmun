@@ -3,6 +3,7 @@ logs/
 swanlog/
 source/results/
 source/swanlog/
+results/
 /docs
 
 # Python
