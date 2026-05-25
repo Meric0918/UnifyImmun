@@ -1,0 +1,32 @@
+# Data directories
+data/
+
+# Trained models
+trained_model/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+
+# IDE
+.idea/
+.vscode/
+
+# Logs and outputs
+*.log
+*.txt
+run.txt
+
+# Temporary files
+*.tmp
+*.bak
+
+# OS files
+.DS_Store
+Thumbs.db
