@@ -16,6 +16,7 @@ from collections import Counter
 from tqdm import tqdm
 from typing import Optional
 import warnings
+from datetime import datetime
 
 import torch
 from torch import Tensor
@@ -374,15 +375,18 @@ class LiverDataSet(Data.Dataset):
         return self.pep_inputs[idx], self.tcr_inputs[idx], self.labels[idx]
 
 
-def split_and_save_data(data_path, output_dir, train_ratio=8, val_ratio=1.5, test_ratio=1.5, n_splits=5):
+def split_and_save_data(data_path, output_dir, train_ratio=7, val_ratio=1.5, test_ratio=1.5, n_splits=5):
     """
     Split liver data into train/val/test sets using stratified split.
-    Ratio: train:val:test = 8:1.5:1.5
+    Ratio: train:val:test = 7:1.5:1.5
+
+    IMPORTANT: Removes duplicate TCR-peptide pairs to prevent data leakage.
+    Same TCR-peptide pair will always appear in the same split.
 
     Args:
         data_path: Path to input CSV file
         output_dir: Directory to save split files
-        train_ratio: Training set ratio (default 8)
+        train_ratio: Training set ratio (default 7)
         val_ratio: Validation set ratio (default 1.5)
         test_ratio: Test set ratio (default 1.5)
         n_splits: Number of cross-validation folds for training/validation within train+val portion
@@ -394,14 +398,23 @@ def split_and_save_data(data_path, output_dir, train_ratio=8, val_ratio=1.5, tes
     print(f"Total samples: {len(data)}")
     print(f"Label distribution: {Counter(data.label)}")
 
+    # Remove duplicates to prevent data leakage
+    # Keep first occurrence of each unique TCR-peptide pair
+    duplicate_count = len(data) - len(data.drop_duplicates(subset=['peptide', 'tcr']))
+    if duplicate_count > 0:
+        print(f"\nWARNING: Found {duplicate_count} duplicate TCR-peptide pairs. Removing duplicates to prevent data leakage.")
+        data = data.drop_duplicates(subset=['peptide', 'tcr'], keep='first')
+        print(f"After removing duplicates: {len(data)} samples")
+        print(f"Label distribution after dedup: {Counter(data.label)}")
+
     # Create output directory
     os.makedirs(output_dir, exist_ok=True)
 
     # Calculate ratios
     total_ratio = train_ratio + val_ratio + test_ratio
-    train_size = train_ratio / total_ratio  # 8/11 ≈ 72.7%
-    val_size = val_ratio / total_ratio       # 1.5/11 ≈ 13.6%
-    test_size = test_ratio / total_ratio     # 1.5/11 ≈ 13.6%
+    train_size = train_ratio / total_ratio  # 7/10 = 70%
+    val_size = val_ratio / total_ratio       # 1.5/10 = 15%
+    test_size = test_ratio / total_ratio     # 1.5/10 = 15%
 
     print(f"\nSplit ratio: train:{train_ratio} | val:{val_ratio} | test:{test_ratio}")
     print(f"Split percentages: train={train_size*100:.1f}% | val={val_size*100:.1f}% | test={test_size*100:.1f}%")
@@ -719,7 +732,7 @@ def test_finetune(model, test_loader, criterion, fold=None):
 
 
 # ==================== Main Training Function ====================
-def run_fine_tuning(data_path='../data/data_liver/TCR_Peptide_balanced.csv',
+def run_fine_tuning(data_path=None,
                     pretrained_encoder_path='../trained_model/HLA_2/model_HLA.pkl',
                     output_dir='../trained_model/finetune_liver',
                     n_folds=5,
@@ -730,15 +743,27 @@ def run_fine_tuning(data_path='../data/data_liver/TCR_Peptide_balanced.csv',
     Run fine-tuning process.
 
     Args:
-        data_path: Path to TCR_Peptide_balanced.csv
+        data_path: Path to input dataset CSV file (REQUIRED, user must specify)
         pretrained_encoder_path: Path to pretrained HLA model for peptide encoder
-        output_dir: Directory to save fine-tuned models
+        output_dir: Base directory to save fine-tuned models (timestamp will be appended)
         n_folds: Number of cross-validation folds
         freeze_peptide_encoder: Whether to freeze peptide encoder (default False per fine-tuning.txt)
         swanlab_project: SwanLab project name
-        swanlab_experiment: SwanLab experiment name
+        swanlab_experiment: SwanLab experiment name (timestamp will be appended)
     """
+    if data_path is None:
+        raise ValueError("data_path must be specified by the user. Example: '../data/data_liver/TCR_Peptide.csv'")
+
     start_time = time.time()
+
+    # Add timestamp to output directory to avoid overwriting previous results
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Extract dataset folder name from data_path
+    dataset_folder = os.path.basename(os.path.dirname(data_path))
+    output_dir = f"{output_dir}_{dataset_folder}_{timestamp}"
+    swanlab_experiment = f"{swanlab_experiment}_{dataset_folder}_{timestamp}"
+    print(f"Output directory: {output_dir}")
+    print(f"SwanLab experiment: {swanlab_experiment}")
 
     # Initialize SwanLab
     swanlab.init(
@@ -764,9 +789,10 @@ def run_fine_tuning(data_path='../data/data_liver/TCR_Peptide_balanced.csv',
         description="Fine-tuning pTCR model for liver data prediction"
     )
 
-    # Step 1: Split data into train/val/test with ratio 8:1.5:1.5
-    data_dir = '../data/data_liver'
-    split_and_save_data(data_path, data_dir, train_ratio=8, val_ratio=1.5, test_ratio=1.5, n_splits=n_folds)
+    # Step 1: Split data into train/val/test with ratio 7:1.5:1.5
+    # Use the same directory as the input data file for saving splits
+    data_dir = os.path.dirname(data_path)
+    split_and_save_data(data_path, data_dir, train_ratio=7, val_ratio=1.5, test_ratio=1.5, n_splits=n_folds)
 
     # Step 2: Create output directory
     os.makedirs(output_dir, exist_ok=True)
@@ -776,7 +802,7 @@ def run_fine_tuning(data_path='../data/data_liver/TCR_Peptide_balanced.csv',
     all_test_performances = []
 
     # Load test data
-    test_loader, test_data = data_load_liver(type_='test', fold=None, batch_size=batch_size)
+    test_loader, test_data = data_load_liver(type_='test', fold=None, batch_size=batch_size, data_dir=data_dir)
     print(f'Test set: {len(test_data)} samples ({Counter(test_data.label)})')
 
     for fold in range(1, n_folds + 1):
@@ -820,8 +846,8 @@ def run_fine_tuning(data_path='../data/data_liver/TCR_Peptide_balanced.csv',
 
         # Load data
         print(f'Loading liver data for fold {fold}')
-        train_loader, train_data = data_load_liver(type_='train', fold=fold, batch_size=batch_size)
-        val_loader, val_data = data_load_liver(type_='val', fold=fold, batch_size=batch_size)
+        train_loader, train_data = data_load_liver(type_='train', fold=fold, batch_size=batch_size, data_dir=data_dir)
+        val_loader, val_data = data_load_liver(type_='val', fold=fold, batch_size=batch_size, data_dir=data_dir)
         print(f'Fold-{fold} Label: Train={Counter(train_data.label)} | Val={Counter(val_data.label)}')
 
         # Training
@@ -854,7 +880,7 @@ def run_fine_tuning(data_path='../data/data_liver/TCR_Peptide_balanced.csv',
         model.eval()
 
         # Final validation
-        final_val_loader, _ = data_load_liver(type_='val', fold=fold, batch_size=batch_size)
+        final_val_loader, _ = data_load_liver(type_='val', fold=fold, batch_size=batch_size, data_dir=data_dir)
         final_performance = valid_finetune(model, final_val_loader, fold, epoch_best, epochs, criterion)
         all_fold_performances.append(final_performance)
 
@@ -925,8 +951,12 @@ def run_fine_tuning(data_path='../data/data_liver/TCR_Peptide_balanced.csv',
 
 # ==================== Entry Point ====================
 if __name__ == '__main__':
+    # User must specify the data_path before running
+    # Example: data_path='../data/data_liver/TCR_Peptide_balanced.csv'
+    data_path = '../data/data_liver/TCR_Peptide_balanced.csv'  # TODO: Modify this path as needed
+
     val_performances, test_performances = run_fine_tuning(
-        data_path='../data/data_liver/TCR_Peptide_balanced.csv',
+        data_path=data_path,
         pretrained_encoder_path='../trained_model/HLA_2/model_HLA.pkl',
         output_dir='../trained_model/finetune_liver',
         n_folds=5,
