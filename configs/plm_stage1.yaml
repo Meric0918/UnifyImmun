@@ -1,0 +1,66 @@
+paths:
+  project_root: ..
+  data_root: ../data
+  cache_root: ../embedding_cache/plm_stage1
+  output_root: ../trained_model/PLM_Unified
+  swanlog_root: ../swanlog
+  esmc_model: /home/mjp/model/ESMC-300M
+  tcr_bert_model: /home/mjp/model/TCR-Bert
+
+model:
+  peptide_input_dim: 960
+  hla_input_dim: 960
+  tcr_input_dim: 768
+  adapter_hidden_dim: 256
+  model_dim: 128
+  num_attention_heads: 4
+  feedforward_dim: 512
+  adapter_dropout: 0.1
+  attention_dropout: 0.1
+  classifier_dropout: 0.2
+  peptide_min_length: 8
+  peptide_max_length: 15
+  hla_max_length: 34
+  tcr_max_length: 34
+
+cache:
+  dtype: float16
+  shard_size: 16384
+  precompute_batch_size: 32
+  compression: null
+  hla_splits: [train, val]
+  tcr_splits: [train, val]
+
+training:
+  fold: 1
+  seed: 42
+  seeds: [42, 3407, 2026]
+  batch_size: 1024
+  online_batch_size: 32
+  num_workers: 2
+  warmup_epochs_per_task: 2
+  max_rounds: 10
+  early_stopping_patience: 3
+  early_stopping_min_delta: 0.0001
+  adapter_lr: 0.0003
+  cross_attention_lr: 0.0002
+  pooling_lr: 0.0003
+  classifier_lr: 0.0003
+  weight_decay: 0.01
+  scheduler_warmup_ratio: 0.05
+  gradient_clip_norm: 1.0
+  fgm_epsilon: 1.0
+  threshold: 0.5
+  mixed_precision: bf16
+  log_every_steps: 50
+  pin_memory: true
+  persistent_workers: false
+  device: auto
+
+swanlab:
+  project: unifyimmun
+  workspace: null
+  mode: online
+  group: plm-stage1-fold{fold}
+  experiment_prefix: PLM-Stage1
+  tags: [ESMC-300M, TCR-BERT, FGM, stage1, unified]

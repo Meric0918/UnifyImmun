@@ -3,6 +3,7 @@ logs/
 swanlog/
 source/results/
 source/swanlog/
+.codegraph/
 /docs
 
 # Python
@@ -52,3 +53,4 @@ data/
 
 # Model weights
 trained_model/
+embedding_cache/

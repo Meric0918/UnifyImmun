@@ -47,6 +47,15 @@ For the convenience of sequentially running all the training steps, you can use 
 
 `python run_all_phases.py`
 
+### ESM-C + TCR-BERT stage-1 training
+
+The new unified PLM pipeline is additive and does not replace the legacy scripts. It
+uses frozen residue-level ESM-C/TCR-BERT caches, a shared peptide Adapter, two
+cross-attention branches, and module-targeted FGM.
+
+See [PLM_STAGE1.md](PLM_STAGE1.md) for checkpoint validation, cache construction,
+three-seed SwanLab experiments, resume, and evaluation commands.
+
 
 ### Model testing
 Given the fine-tuned model or our trained model (saved in trained_model folder), you can evaluate it on our demo test sets using the following scripts.
