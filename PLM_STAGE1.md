@@ -11,15 +11,12 @@
 - 1B 只对当前任务的 Peptide Adapter 与 receptor Adapter 使用 FGM；
 - SwanLab 按 fold 分组，三个随机种子分别记录。
 
-旧版 `HLA_ESM2*.py`、`TCR_ESM2*.py` 和
-`models/esm2_embedding.py` 不变，继续作为 baseline。
-
 ## 1. 环境
 
 服务器已有 CUDA PyTorch 环境时，只安装缺失依赖：
 
 ```bash
-cd /home/mjp/Project/embed/UnifyImmun
+cd /home/mjp/Project/PLM/UnifyImmun
 pip install -r requirements-plm.txt
 ```
 
