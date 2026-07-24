@@ -119,6 +119,8 @@ class ExperimentConfig:
             or self.cache.precompute_batch_size < 1
         ):
             raise ValueError("batch sizes must be positive")
+        if self.training.num_workers < 0:
+            raise ValueError("num_workers cannot be negative")
         if self.training.warmup_epochs_per_task < 0:
             raise ValueError("warmup_epochs_per_task cannot be negative")
         if self.training.max_rounds < 1:
@@ -237,6 +239,7 @@ def apply_overrides(
     seed: Optional[int] = None,
     swanlab_mode: Optional[str] = None,
     device: Optional[str] = None,
+    num_workers: Optional[int] = None,
 ) -> ExperimentConfig:
     """Apply common CLI overrides in place and validate the result."""
 
@@ -248,5 +251,7 @@ def apply_overrides(
         config.swanlab.mode = swanlab_mode
     if device is not None:
         config.training.device = device
+    if num_workers is not None:
+        config.training.num_workers = num_workers
     config.validate()
     return config

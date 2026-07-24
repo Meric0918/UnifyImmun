@@ -36,6 +36,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int)
     parser.add_argument("--device")
     parser.add_argument(
+        "--num-workers",
+        type=int,
+        help="Override DataLoader workers; use 0 to debug cache reads in-process.",
+    )
+    parser.add_argument(
         "--swanlab-mode",
         choices=("online", "local", "offline", "disabled"),
     )
@@ -159,6 +164,7 @@ def main() -> None:
         seed=args.seed,
         swanlab_mode=args.swanlab_mode,
         device=args.device,
+        num_workers=args.num_workers,
     )
     if args.no_cache and args.limit is None:
         raise ValueError("--no-cache is a debug mode and requires an explicit --limit")

@@ -233,6 +233,11 @@ class TCRBertResidueEncoder(FrozenResidueEncoder):
             raise FileNotFoundError(f"TCR-BERT weights not found: {weights_path}")
         state_dict = _load_trusted_state_dict(weights_path)
         missing, unexpected = classifier_model.load_state_dict(state_dict, strict=False)
+        # Transformers 4.4 persisted this deterministic BERT buffer in checkpoints;
+        # current versions recreate it from max_position_embeddings.
+        unexpected = [
+            key for key in unexpected if key != "bert.embeddings.position_ids"
+        ]
         if missing or unexpected:
             raise RuntimeError(
                 "TCR-BERT state_dict does not match its config: "

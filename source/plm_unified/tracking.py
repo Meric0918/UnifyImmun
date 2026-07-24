@@ -17,6 +17,7 @@ class SwanLabTracker:
         self.mode = config.swanlab.mode
         self.run = None
         self.run_id: Optional[str] = None
+        self.text_factory = None
         if self.mode == "disabled":
             return
         try:
@@ -26,6 +27,7 @@ class SwanLabTracker:
                 "SwanLab logging is required for this run. "
                 "Install requirements-plm.txt or pass --swanlab-mode disabled."
             ) from exc
+        self.text_factory = swanlab.Text
 
         logdir = config.paths.swanlog_root
         logdir.mkdir(parents=True, exist_ok=True)
@@ -59,7 +61,12 @@ class SwanLabTracker:
     def log(self, values: Mapping[str, Any], *, step: Optional[int] = None) -> None:
         if self.run is None:
             return
-        payload = dict(values)
+        payload = {
+            key: self.text_factory(value)
+            if isinstance(value, str) and self.text_factory is not None
+            else value
+            for key, value in values.items()
+        }
         if step is not None:
             payload.setdefault("global_step", step)
         try:

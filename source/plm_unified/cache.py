@@ -334,6 +334,15 @@ class EmbeddingCache:
         except KeyError as exc:
             raise KeyError(f"Sequence missing from {self.entity_dir.name} cache: {sequence}") from exc
 
+    def worker_reader(self) -> "EmbeddingCache":
+        """Return a lightweight reader for a spawned DataLoader worker."""
+
+        return EmbeddingCache(
+            self.entity_dir,
+            load_index=False,
+            max_open_shards=self.max_open_shards,
+        )
+
     def _handle(self, shard_id: int):
         if shard_id in self._handles:
             handle = self._handles.pop(shard_id)

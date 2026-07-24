@@ -29,6 +29,17 @@ from .tracking import SwanLabTracker
 Stage = Literal["warmup", "stage1b", "complete"]
 
 
+def _metric_summary(metrics: BinaryMetrics) -> str:
+    return (
+        f"loss={metrics.loss:.4f} "
+        f"AUROC={metrics.auroc:.4f} "
+        f"AUPR={metrics.aupr:.4f} "
+        f"ACC={metrics.accuracy:.4f} "
+        f"MCC={metrics.mcc:.4f} "
+        f"F1={metrics.f1:.4f}"
+    )
+
+
 @dataclass
 class EpochResult:
     metrics: BinaryMetrics
@@ -186,7 +197,7 @@ class Stage1Trainer:
             self.device.type == "cuda"
             and config.training.mixed_precision == "fp16"
         )
-        self.scaler = torch.cuda.amp.GradScaler(enabled=scaler_enabled)
+        self.scaler = torch.amp.GradScaler("cuda", enabled=scaler_enabled)
         self.fgm = ModuleFGM(model)
 
         self.stage: Stage = "warmup"
@@ -438,6 +449,15 @@ class Stage1Trainer:
                         },
                         step=self.global_step,
                     )
+                    print(
+                        f"[Stage 1A][seed={self.config.training.seed}]"
+                        f"[task={'pHLA' if task == 'phla' else 'pTCR'}]"
+                        f"[epoch={epoch}/"
+                        f"{self.config.training.warmup_epochs_per_task}]"
+                        f"[step={self.global_step}] "
+                        f"{_metric_summary(result.metrics)}",
+                        flush=True,
+                    )
                     self.save_checkpoint(self.run_dir / "last.pt")
 
             self.stage = "stage1b"
@@ -494,6 +514,24 @@ class Stage1Trainer:
                 )
                 log_values.update(prefixed_metrics(f"round/{task}/val", val_metrics[task]))
             self.tracker.log(log_values, step=self.global_step)
+            print(
+                f"[Stage 1B][seed={self.config.training.seed}]"
+                f"[round={round_id}/{self.config.training.max_rounds}]"
+                f"[step={self.global_step}] "
+                f"joint={score:.4f} best={self.best_joint_score:.4f} "
+                f"improved={'yes' if improved else 'no'} "
+                f"patience={self.no_improve_rounds}/"
+                f"{self.config.training.early_stopping_patience}",
+                flush=True,
+            )
+            for task in ("phla", "ptcr"):
+                task_name = "pHLA" if task == "phla" else "pTCR"
+                print(
+                    f"  {task_name} train: "
+                    f"{_metric_summary(train_results[task].metrics)} | "
+                    f"val: {_metric_summary(val_metrics[task])}",
+                    flush=True,
+                )
 
             self.save_checkpoint(self.run_dir / "last.pt")
             if improved:
@@ -502,10 +540,21 @@ class Stage1Trainer:
                 self.no_improve_rounds
                 >= self.config.training.early_stopping_patience
             ):
+                print(
+                    f"[Early stopping][seed={self.config.training.seed}] "
+                    f"round={round_id} best_joint={self.best_joint_score:.4f}",
+                    flush=True,
+                )
                 break
 
         self.stage = "complete"
         self.save_checkpoint(self.run_dir / "last.pt")
+        print(
+            f"[Complete][seed={self.config.training.seed}] "
+            f"round={self.current_round} step={self.global_step} "
+            f"best_joint={self.best_joint_score:.4f}",
+            flush=True,
+        )
         return self.summary()
 
     def checkpoint_state(self) -> dict[str, Any]:

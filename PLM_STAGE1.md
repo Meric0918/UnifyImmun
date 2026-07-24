@@ -73,12 +73,15 @@ embedding_cache/plm_stage1/fold_1/
 python source/train_plm_stage1.py \
   --config configs/plm_stage1.yaml \
   --fold 1 \
-  --seed 42 \
+  --seed 9999 \
   --limit 4096 \
+  --num-workers 0 \
   --swanlab-mode local
 ```
 
-`--limit` 只用于 smoke test，正式实验禁止使用。
+`--limit` 只用于 smoke test，正式实验禁止使用。调试时使用
+`--num-workers 0` 可将 HDF5 缓存读取留在主进程，便于定位数据问题。
+调试 seed 使用 9999，避免覆盖正式实验的 seed 42/3407/2026。
 
 无需缓存的在线编码调试必须同时指定 `--no-cache` 和 `--limit`，并自动使用
 `training.online_batch_size`：

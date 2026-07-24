@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import io
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 try:
@@ -173,6 +175,12 @@ class EmbeddingCacheTests(unittest.TestCase):
             np.testing.assert_array_equal(restored_hidden[2], hidden[2])
             np.testing.assert_array_equal(restored_mask[0], mask[2].astype(bool))
 
+            worker_reader = cache.worker_reader()
+            self.assertIsNone(worker_reader._index)
+            worker_hidden, worker_mask = worker_reader.get_many(locators)
+            np.testing.assert_array_equal(worker_hidden, restored_hidden)
+            np.testing.assert_array_equal(worker_mask, restored_mask)
+
 
 try:
     __import__("sklearn")
@@ -258,11 +266,17 @@ class Stage1TrainerTests(unittest.TestCase):
                 loaders,
                 tracker,
             )
-            summary = trainer.fit()
+            terminal_output = io.StringIO()
+            with redirect_stdout(terminal_output):
+                summary = trainer.fit()
             self.assertEqual(summary["stage"], "complete")
             self.assertIn("phla", summary["best_val_metrics"])
             self.assertTrue((config.run_dir() / "warmup_last.pt").is_file())
             self.assertTrue((config.run_dir() / "best_joint.pt").is_file())
+            output = terminal_output.getvalue()
+            self.assertIn("[Stage 1A][seed=42][task=pHLA]", output)
+            self.assertIn("[Stage 1B][seed=42][round=1/1]", output)
+            self.assertIn("[Complete][seed=42]", output)
 
 
 if __name__ == "__main__":

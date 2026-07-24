@@ -326,7 +326,10 @@ def make_cached_dataloader(
     )
     generator = torch.Generator()
     generator.manual_seed(seed)
-    collator = CachedPairCollator(peptide_cache, receptor_cache)
+    collator = CachedPairCollator(
+        peptide_cache.worker_reader(),
+        receptor_cache.worker_reader(),
+    )
     return DataLoader(
         dataset,
         batch_size=batch_size,
@@ -338,6 +341,7 @@ def make_cached_dataloader(
         collate_fn=collator,
         generator=generator,
         worker_init_fn=_seed_worker,
+        multiprocessing_context="spawn" if num_workers > 0 else None,
     )
 
 
