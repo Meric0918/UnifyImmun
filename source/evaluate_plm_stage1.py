@@ -7,13 +7,22 @@ import argparse
 import json
 from pathlib import Path
 
+from plm_unified.artifacts import (
+    create_artifact_timestamp,
+    find_latest_common_artifacts,
+    timestamped_filename,
+)
 from plm_unified.cache import EmbeddingCache
 from plm_unified.config import apply_overrides, load_config
 from plm_unified.data import make_cached_dataloader, make_online_dataloader, split_path
 from plm_unified.evaluation import evaluate_model
 from plm_unified.encoders import OnlineEncoderBundle, checkpoint_fingerprint
-from plm_unified.model import UnifiedBindingModel
-from plm_unified.trainer import load_training_checkpoint, resolve_device
+from plm_unified.model import TaskSpecificBindingModel, UnifiedBindingModel
+from plm_unified.trainer import (
+    TASK_CHECKPOINT_FILENAMES,
+    load_training_checkpoint,
+    resolve_device,
+)
 
 
 def _online_encoded_loader(loader, encoders, task):
@@ -31,6 +40,27 @@ def _online_encoded_loader(loader, encoders, task):
             "receptor_mask": encoded["receptor_mask"],
             "labels": batch["labels"],
         }
+
+
+def _task_model(checkpoint, config, expected_task):
+    if checkpoint.get("checkpoint_type") != "task_model":
+        raise ValueError("Expected a task_model checkpoint")
+    checkpoint_task = checkpoint.get("task")
+    if checkpoint_task != expected_task:
+        raise ValueError(
+            f"Checkpoint task '{checkpoint_task}' does not match '{expected_task}'"
+        )
+    saved_model_config = checkpoint.get("config", {}).get("model")
+    if (
+        saved_model_config is not None
+        and saved_model_config != config.to_dict()["model"]
+    ):
+        raise ValueError(
+            "Task checkpoint model configuration does not match current config"
+        )
+    model = TaskSpecificBindingModel(config.model, expected_task)
+    model.load_state_dict(checkpoint["model"])
+    return model
 
 
 def parse_args() -> argparse.Namespace:
@@ -76,16 +106,57 @@ def main() -> None:
         seed=args.seed,
         device=args.device,
     )
-    checkpoint_path = args.checkpoint or config.run_dir() / "best_joint.pt"
-    checkpoint = load_training_checkpoint(checkpoint_path, map_location="cpu")
-    model = UnifiedBindingModel(config.model)
-    model.load_state_dict(checkpoint["model"])
-
     splits = {"phla": args.hla_split, "ptcr": args.tcr_split}
     tasks = [t.strip() for t in args.tasks.split(",") if t.strip()]
     unknown = [t for t in tasks if t not in splits]
     if unknown:
         raise ValueError(f"Unknown tasks: {unknown}. Choose from: {sorted(splits)}")
+    if not tasks:
+        raise ValueError("At least one task must be selected")
+
+    models = {}
+    checkpoint_paths = {}
+    checkpoint_types = {}
+    if args.checkpoint:
+        checkpoint_path = args.checkpoint.resolve()
+        checkpoint = load_training_checkpoint(checkpoint_path, map_location="cpu")
+        checkpoint_type = checkpoint.get("checkpoint_type", "training")
+        checkpoint_task = checkpoint.get("task")
+        if checkpoint_type == "task_model":
+            if tasks != [checkpoint_task]:
+                raise ValueError(
+                    f"Task checkpoint '{checkpoint_task}' requires "
+                    f"--tasks {checkpoint_task}"
+                )
+            models[checkpoint_task] = _task_model(
+                checkpoint,
+                config,
+                checkpoint_task,
+            )
+        else:
+            model = UnifiedBindingModel(config.model)
+            model.load_state_dict(checkpoint["model"])
+            models = {task: model for task in tasks}
+        for task in tasks:
+            checkpoint_paths[task] = str(checkpoint_path)
+            checkpoint_types[task] = checkpoint_type
+    else:
+        resolved_checkpoints = find_latest_common_artifacts(
+            config.run_dir(),
+            {
+                task: TASK_CHECKPOINT_FILENAMES[task]
+                for task in tasks
+            },
+        )
+        for task in tasks:
+            checkpoint_path = resolved_checkpoints[task]
+            checkpoint = load_training_checkpoint(
+                checkpoint_path,
+                map_location="cpu",
+            )
+            models[task] = _task_model(checkpoint, config, task)
+            checkpoint_paths[task] = str(checkpoint_path)
+            checkpoint_types[task] = "task_model"
 
     online_encoders = None
     if args.no_cache:
@@ -178,23 +249,35 @@ def main() -> None:
                 peptide_max_length=config.model.peptide_max_length,
                 limit=args.limit,
             )
-        results[task] = evaluate_model(model, loader, task, config).to_dict()
+        results[task] = evaluate_model(
+            models[task],
+            loader,
+            task,
+            config,
+        ).to_dict()
 
+    report_timestamp = create_artifact_timestamp()
+    report_filename = timestamped_filename(
+        f"evaluation-hla_{args.hla_split}-tcr_{args.tcr_split}.json",
+        report_timestamp,
+    )
+    report_path = config.run_dir() / report_filename
     report = {
-        "checkpoint": str(checkpoint_path),
+        "artifact_timestamp": report_timestamp,
+        "checkpoints": checkpoint_paths,
+        "checkpoint_types": checkpoint_types,
         "fold": config.training.fold,
         "seed": config.training.seed,
         "splits": splits,
         "metrics": results,
+        "report_path": str(report_path.resolve()),
     }
-    report_path = config.run_dir() / (
-        f"evaluation-hla_{args.hla_split}-tcr_{args.tcr_split}.json"
-    )
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(
         json.dumps(report, indent=2, sort_keys=True),
         encoding="utf-8",
     )
+    print(f"Report written to: {report_path}", flush=True)
     print(json.dumps(report, indent=2, sort_keys=True))
 
 

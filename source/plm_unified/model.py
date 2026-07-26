@@ -18,6 +18,23 @@ from .config import ModelConfig
 
 Task = Literal["phla", "ptcr"]
 
+TASK_MODULE_NAMES: dict[Task, tuple[str, ...]] = {
+    "phla": (
+        "peptide_adapter",
+        "hla_adapter",
+        "phla_cross_attention",
+        "phla_pooling",
+        "phla_classifier",
+    ),
+    "ptcr": (
+        "peptide_adapter",
+        "tcr_adapter",
+        "ptcr_cross_attention",
+        "ptcr_pooling",
+        "ptcr_classifier",
+    ),
+}
+
 
 @dataclass
 class BindingOutput:
@@ -102,24 +119,11 @@ class UnifiedBindingModel(nn.Module):
         )
 
     def task_modules(self, task: Task) -> dict[str, nn.Module]:
-        shared = {"peptide_adapter": self.peptide_adapter}
-        if task == "phla":
-            return {
-                **shared,
-                "hla_adapter": self.hla_adapter,
-                "phla_cross_attention": self.phla_cross_attention,
-                "phla_pooling": self.phla_pooling,
-                "phla_classifier": self.phla_classifier,
-            }
-        if task == "ptcr":
-            return {
-                **shared,
-                "tcr_adapter": self.tcr_adapter,
-                "ptcr_cross_attention": self.ptcr_cross_attention,
-                "ptcr_pooling": self.ptcr_pooling,
-                "ptcr_classifier": self.ptcr_classifier,
-            }
-        raise ValueError(f"Unknown task: {task}")
+        try:
+            names = TASK_MODULE_NAMES[task]
+        except KeyError as exc:
+            raise ValueError(f"Unknown task: {task}") from exc
+        return {name: getattr(self, name) for name in names}
 
     def fgm_modules(self, task: Task) -> dict[str, nn.Module]:
         if task == "phla":
@@ -146,3 +150,109 @@ class UnifiedBindingModel(nn.Module):
         return [
             name for name, parameter in self.named_parameters() if parameter.requires_grad
         ]
+
+
+class TaskSpecificBindingModel(nn.Module):
+    """One deployable pHLA or pTCR branch exported from the unified model."""
+
+    def __init__(self, config: ModelConfig, task: Task):
+        super().__init__()
+        if task not in TASK_MODULE_NAMES:
+            raise ValueError(f"Unknown task: {task}")
+        self.task = task
+        adapter_kwargs = {
+            "model_dim": config.model_dim,
+            "hidden_dim": config.adapter_hidden_dim,
+            "dropout": config.adapter_dropout,
+        }
+        attention_kwargs = {
+            "model_dim": config.model_dim,
+            "num_heads": config.num_attention_heads,
+            "feedforward_dim": config.feedforward_dim,
+            "dropout": config.attention_dropout,
+        }
+        self.peptide_adapter = SequenceAdapter(
+            config.peptide_input_dim, **adapter_kwargs
+        )
+        if task == "phla":
+            self.hla_adapter = SequenceAdapter(
+                config.hla_input_dim, **adapter_kwargs
+            )
+            self.phla_cross_attention = CrossAttentionBlock(**attention_kwargs)
+            self.phla_pooling = MaskedAttentionPooling(config.model_dim)
+            self.phla_classifier = BindingClassifier(
+                config.model_dim, config.classifier_dropout
+            )
+        else:
+            self.tcr_adapter = SequenceAdapter(
+                config.tcr_input_dim, **adapter_kwargs
+            )
+            self.ptcr_cross_attention = CrossAttentionBlock(**attention_kwargs)
+            self.ptcr_pooling = MaskedAttentionPooling(config.model_dim)
+            self.ptcr_classifier = BindingClassifier(
+                config.model_dim, config.classifier_dropout
+            )
+
+    def forward(
+        self,
+        task: Task,
+        peptide_hidden: torch.Tensor,
+        peptide_mask: torch.Tensor,
+        receptor_hidden: torch.Tensor,
+        receptor_mask: torch.Tensor,
+        *,
+        return_attention: bool = False,
+    ) -> BindingOutput:
+        if task != self.task:
+            raise ValueError(
+                f"This checkpoint is for task '{self.task}', not '{task}'"
+            )
+        peptide = self.peptide_adapter(peptide_hidden, peptide_mask)
+        if task == "phla":
+            receptor = self.hla_adapter(receptor_hidden, receptor_mask)
+            cross_attention = self.phla_cross_attention
+            pooling = self.phla_pooling
+            classifier = self.phla_classifier
+        else:
+            receptor = self.tcr_adapter(receptor_hidden, receptor_mask)
+            cross_attention = self.ptcr_cross_attention
+            pooling = self.ptcr_pooling
+            classifier = self.ptcr_classifier
+
+        sequence, attention_weights = cross_attention(
+            peptide,
+            receptor,
+            peptide_mask,
+            receptor_mask,
+            return_attention=return_attention,
+        )
+        pooled, pooling_weights = pooling(
+            sequence,
+            peptide_mask,
+            return_weights=return_attention,
+        )
+        return BindingOutput(
+            logits=classifier(pooled),
+            cross_attention=attention_weights,
+            pooling_weights=pooling_weights,
+        )
+
+
+def extract_task_state_dict(
+    state_dict: dict[str, torch.Tensor],
+    task: Task,
+) -> dict[str, torch.Tensor]:
+    """Select the shared peptide path and one task branch from unified weights."""
+
+    try:
+        prefixes = tuple(f"{name}." for name in TASK_MODULE_NAMES[task])
+    except KeyError as exc:
+        raise ValueError(f"Unknown task: {task}") from exc
+    selected = {
+        name: value.detach().cpu()
+        for name, value in state_dict.items()
+        if name.startswith(prefixes)
+    }
+    if not selected:
+        raise ValueError(f"No parameters found for task '{task}'")
+    return selected

@@ -1,0 +1,13 @@
+# 示例：用缓存评测 best_ptcr.pt 在 covid 上的表现（不再需要 --no-cache）
+python source/evaluate_plm_stage1.py \
+    --config configs/plm_stage1.yaml \
+    --checkpoint trained_model/PLM_Unified/fold_1/seed_42/best_ptcr.pt \
+    --tasks ptcr \
+    --tcr-split covid \
+    --fold 1 --seed 42 --device cuda
+
+python source/test_ptcr_best.py \
+    --folds 2 3 4 5 \
+    --seeds 42 2026 \
+    --sets covid independent triple \
+    --device cuda

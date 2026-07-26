@@ -7,6 +7,10 @@ import argparse
 import json
 from pathlib import Path
 
+from plm_unified.artifacts import (
+    create_artifact_timestamp,
+    validate_artifact_timestamp,
+)
 from plm_unified.cache import EmbeddingCache
 from plm_unified.config import apply_overrides, load_config
 from plm_unified.data import (
@@ -19,6 +23,7 @@ from plm_unified.model import UnifiedBindingModel
 from plm_unified.tracking import SwanLabTracker
 from plm_unified.trainer import (
     Stage1Trainer,
+    load_training_checkpoint,
     peek_swanlab_run_id,
     set_global_seed,
 )
@@ -45,6 +50,10 @@ def parse_args() -> argparse.Namespace:
         choices=("online", "local", "offline", "disabled"),
     )
     parser.add_argument("--resume", type=Path)
+    parser.add_argument(
+        "--run-timestamp",
+        help="Optional shared artifact suffix in YYYYMMDD_HHMMSS_ffffff format.",
+    )
     parser.add_argument(
         "--no-cache",
         action="store_true",
@@ -158,6 +167,15 @@ def make_loaders(config, caches, limit, *, online: bool):
 
 def main() -> None:
     args = parse_args()
+    resume_timestamp = None
+    if args.resume and not args.run_timestamp:
+        resume_timestamp = load_training_checkpoint(
+            args.resume,
+            map_location="cpu",
+        ).get("run_timestamp")
+    run_timestamp = validate_artifact_timestamp(
+        args.run_timestamp or resume_timestamp or create_artifact_timestamp()
+    )
     config = apply_overrides(
         load_config(args.config),
         fold=args.fold,
@@ -199,7 +217,11 @@ def main() -> None:
     model = UnifiedBindingModel(config.model)
 
     resume_id = peek_swanlab_run_id(args.resume) if args.resume else None
-    with SwanLabTracker(config, resume_id=resume_id) as tracker:
+    with SwanLabTracker(
+        config,
+        resume_id=resume_id,
+        run_timestamp=run_timestamp,
+    ) as tracker:
         data_log = {}
         for split_name, loaders in (
             ("train", train_loaders),
@@ -237,6 +259,7 @@ def main() -> None:
             else {"online": online_encoders.metadata()},
             online_encoders=online_encoders,
             input_mode="online_debug" if args.no_cache else "cache",
+            run_timestamp=run_timestamp,
         )
         if args.resume:
             trainer.load_checkpoint(args.resume)
@@ -245,7 +268,8 @@ def main() -> None:
             {
                 "training/complete": 1,
                 "training/final_round": summary["round"],
-                "training/best_joint_score": summary["best_joint_score"],
+                "training/best_phla_score": summary["best_task_scores"]["phla"],
+                "training/best_ptcr_score": summary["best_task_scores"]["ptcr"],
             },
             step=trainer.global_step,
         )

@@ -945,52 +945,69 @@ SwanLab 需要分别记录 clean loss、adversarial loss、epsilon、攻击参�
 
 # 十四、阶段 1 的停止标准
 
-每个完整 round 后，同时评估：
+阶段 1B 不再使用 pHLA 与 pTCR 的联合分数进行早停。两个分类头分别选择
+各自的最佳模型，并独立维护 early-stopping 状态。
 
-```text
-pHLA validation AUROC
-pHLA validation AUPR
-pTCR validation AUROC
-pTCR validation AUPR
-```
-
-定义联合指标：
+每个任务完成一个有效训练 round 后，在该任务的验证集上评估 AUROC 和 AUPR，
+并定义任务分数：
 
 $$
-S_{\text{joint}}
+S_{\text{pHLA}}
 =
 \frac{
 AUROC_{\text{pHLA}}
 +
 AUPR_{\text{pHLA}}
-+
+}{2}
+$$
+
+$$
+S_{\text{pTCR}}
+=
+\frac{
 AUROC_{\text{pTCR}}
 +
 AUPR_{\text{pTCR}}
-}{4}
+}{2}
 $$
 
-保存：
+即代码中的：
 
 ```text
-warmup_last.pt
-last.pt
-best_joint.pt
+task_score = (task AUROC + task AUPR) / 2
 ```
 
-Early stopping：
+两个任务分别维护 `best_task_score`、`no_improve_rounds` 和 `stopped`：
 
 ```text
 max rounds：10
-连续 3 个完整 rounds 没有提升则停止
+early-stopping patience：3 个该任务的有效训练 rounds
 min delta：1e-4
 ```
 
-不能只用 pHLA 或 pTCR 单一指标选择模型，否则容易导致另一个任务退化。
+只有当当前任务分数严格大于
+`best_task_score + 1e-4` 时，才视为提升并将该任务的 patience 清零；否则
+`no_improve_rounds` 加 1。某任务连续 3 个有效训练 rounds 未达到上述提升条件时，
+仅停止该任务后续的训练与验证，另一个尚未停止的任务继续训练。两个任务都停止，
+或全局达到 10 rounds 时，阶段 1B 结束。
 
-checkpoint 必须包含模型、optimizer、scheduler、AMP scaler、round、随机数状态、
-完整配置、缓存 manifest/模型指纹、SwanLab run id 和两个任务的完整验证指标，
-以支持严格断点续训。
+同一次训练的 checkpoint 文件共享同一个时间戳：
+
+```text
+warmup_last_<timestamp>.pt
+last_<timestamp>.pt
+best_phla_<timestamp>.pt
+best_ptcr_<timestamp>.pt
+```
+
+训练过程不再生成 `best_joint.pt`。`best_phla_<timestamp>.pt` 和
+`best_ptcr_<timestamp>.pt` 仅在对应任务自身的验证分数提升时更新，且分别只保存
+共享 Peptide Adapter 与对应任务的 receptor Adapter、cross-attention、pooling
+和分类头，用于独立推理。
+
+用于断点续训的 `last_<timestamp>.pt` 保存完整双任务模型、optimizer、scheduler、
+AMP scaler、当前 round、随机数状态、完整配置、缓存 manifest/模型指纹、
+SwanLab run id，以及两个任务各自的最佳验证指标和 early-stopping 状态。
 
 ---
 

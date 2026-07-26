@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Optional
 
+from .artifacts import create_artifact_timestamp, validate_artifact_timestamp
 from .config import ExperimentConfig
 
 
@@ -13,11 +14,15 @@ class SwanLabTracker:
         config: ExperimentConfig,
         *,
         resume_id: Optional[str] = None,
+        run_timestamp: Optional[str] = None,
     ):
         self.mode = config.swanlab.mode
         self.run = None
         self.run_id: Optional[str] = None
         self.text_factory = None
+        self.run_timestamp = validate_artifact_timestamp(
+            run_timestamp or create_artifact_timestamp()
+        )
         if self.mode == "disabled":
             return
         try:
@@ -35,6 +40,7 @@ class SwanLabTracker:
         experiment_name = (
             f"{config.swanlab.experiment_prefix}"
             f"-fold{config.training.fold}-seed{config.training.seed}"
+            f"-{self.run_timestamp}"
         )
         init_kwargs: dict[str, Any] = {
             "project": config.swanlab.project,

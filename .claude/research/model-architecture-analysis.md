@@ -553,37 +553,35 @@ During warmup:
 ### 3.5 Phase 1B: Alternating with FGM (`trainer.py:467-548`)
 
 ```text
-Purpose:  Dual-task alternating training with FGM adversarial attacks
-Duration: max 10 rounds, early stop after 3 no-improvement rounds
-          (max_rounds=10, early_stopping_patience=3)
+Purpose:  Per-task alternating training with FGM adversarial attacks
+Duration: max 10 rounds; each task has its own patience=3
 
 Each round:
-  1. pHLA training epoch:
+  1. If pHLA is active, run its training epoch:
      set_trainable_task("phla")
      train_epoch("phla", use_fgm=True)
      -> FGM attacks: peptide_adapter + hla_adapter only
 
-  2. pTCR training epoch:
+  2. If pTCR is active, run its training epoch:
      set_trainable_task("ptcr")
      train_epoch("ptcr", use_fgm=True)
      -> FGM attacks: peptide_adapter + tcr_adapter only
 
-  3. Validation:
-     evaluate("phla", val_loader) -> BinaryMetrics
-     evaluate("ptcr", val_loader) -> BinaryMetrics
-     joint_score = (phla.auroc + phla.aupr + ptcr.auroc + ptcr.aupr) / 4
+  3. Validate each active task:
+     task_score = (task.auroc + task.aupr) / 2
 
-  4. Best model tracking:
-     If joint_score > best_joint_score + 1e-4:
-       Save: run_dir / "best_joint.pt"
-       best_joint_score = joint_score
-       no_improve_rounds = 0
+  4. Track each task independently:
+     If task_score > best_task_score[task] + 1e-4:
+       Save: run_dir / "best_{task}.pt"
+       best_task_score[task] = task_score
+       no_improve_rounds[task] = 0
      Else:
-       no_improve_rounds += 1
+       no_improve_rounds[task] += 1
 
-  5. Early stopping:
-     If no_improve_rounds >= 3 (early_stopping_patience):
-       Stop training
+  5. Per-task early stopping:
+     If no_improve_rounds[task] >= 3:
+       Stop training that task only
+     Stop the loop when both tasks have stopped or max_rounds is reached
 
 After completion:
   stage = "complete"
@@ -629,13 +627,14 @@ The gradient from the adversarial forward is **accumulated** with the clean grad
 
 `trainer.py:185`
 
-### 3.8 Joint Score Formula
+### 3.8 Per-Task Early-Stopping Score
 
 ```python
-joint_score = (pHLA_AUROC + pHLA_AUPR + pTCR_AUROC + pTCR_AUPR) / 4.0
+pHLA_score = (pHLA_AUROC + pHLA_AUPR) / 2.0
+pTCR_score = (pTCR_AUROC + pTCR_AUPR) / 2.0
 ```
 
-`metrics.py:78-92` and `PLM_STAGE1.md:127-129`
+The two scores, best metrics, patience counters, and stopped flags are independent.
 
 ### 3.9 Metrics Computed (`metrics.py:29-75`)
 
@@ -859,9 +858,14 @@ Extracted from `configs/plm_stage1.yaml` and `config.py` defaults.
 |---|---|---|
 | `last.pt` | After every epoch and round | model, optimizer, scheduler, scaler, stage, RNG state, dataloader state |
 | `warmup_last.pt` | After warmup completes (end of phase 1A) | Full checkpoint state |
-| `best_joint.pt` | When joint_score improves by > 1e-4 in phase 1B | Full checkpoint state |
+| `best_phla.pt` | When the pHLA score improves by > 1e-4 | Shared peptide path plus the pHLA adapter, attention, pooling, and classifier |
+| `best_ptcr.pt` | When the pTCR score improves by > 1e-4 | Shared peptide path plus the pTCR adapter, attention, pooling, and classifier |
 
-`trainer.py:461-538` and `trainer.py:560-591`
+The two task checkpoints use `TaskSpecificBindingModel`. They omit optimizer state and
+the unused receptor branch, so they are independent inference artifacts rather than
+training-resume checkpoints. New training does not create `best_joint.pt`; legacy
+`best_joint.pt` files can still be split with
+`source/export_plm_task_models.py`.
 
 ---
 

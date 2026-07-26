@@ -29,7 +29,7 @@ cache:
   precompute_batch_size: 32
   compression: null
   hla_splits: [train, val]
-  tcr_splits: [train, val]
+  tcr_splits: [train, val, independent, triple, covid]
 
 training:
   fold: 1

@@ -14,19 +14,28 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from .artifacts import (
+    create_artifact_timestamp,
+    timestamped_filename,
+    validate_artifact_timestamp,
+)
 from .config import ExperimentConfig
 from .encoders import OnlineEncoderBundle
 from .fgm import FGMStats, ModuleFGM
 from .metrics import (
     BinaryMetrics,
     compute_binary_metrics,
-    joint_score,
     prefixed_metrics,
+    task_score,
 )
-from .model import Task, UnifiedBindingModel
+from .model import Task, UnifiedBindingModel, extract_task_state_dict
 from .tracking import SwanLabTracker
 
 Stage = Literal["warmup", "stage1b", "complete"]
+TASK_CHECKPOINT_FILENAMES: dict[Task, str] = {
+    "phla": "best_phla.pt",
+    "ptcr": "best_ptcr.pt",
+}
 
 
 def _metric_summary(metrics: BinaryMetrics) -> str:
@@ -161,6 +170,7 @@ class Stage1Trainer:
         cache_metadata: Optional[Mapping[str, Any]] = None,
         online_encoders: Optional[OnlineEncoderBundle] = None,
         input_mode: str = "cache",
+        run_timestamp: Optional[str] = None,
     ):
         self.model = model
         self.config = config
@@ -203,12 +213,29 @@ class Stage1Trainer:
         self.stage: Stage = "warmup"
         self.warmup_completed: dict[Task, int] = {"phla": 0, "ptcr": 0}
         self.current_round = 0
-        self.best_joint_score = -float("inf")
-        self.best_val_metrics: dict[str, dict[str, float | int]] = {}
-        self.no_improve_rounds = 0
+        self.best_task_scores: dict[Task, float] = {
+            "phla": -float("inf"),
+            "ptcr": -float("inf"),
+        }
+        self.best_val_metrics: dict[Task, dict[str, float | int]] = {}
+        self.no_improve_rounds: dict[Task, int] = {"phla": 0, "ptcr": 0}
+        self.stopped_tasks: dict[Task, bool] = {"phla": False, "ptcr": False}
         self.global_step = 0
         self.run_dir = config.run_dir()
         self.run_dir.mkdir(parents=True, exist_ok=True)
+        self.run_timestamp = validate_artifact_timestamp(
+            run_timestamp or create_artifact_timestamp()
+        )
+        self.last_checkpoint_path = self.run_dir / timestamped_filename(
+            "last.pt", self.run_timestamp
+        )
+        self.warmup_checkpoint_path = self.run_dir / timestamped_filename(
+            "warmup_last.pt", self.run_timestamp
+        )
+        self.task_checkpoint_paths: dict[Task, Path] = {
+            task: self.run_dir / timestamped_filename(filename, self.run_timestamp)
+            for task, filename in TASK_CHECKPOINT_FILENAMES.items()
+        }
 
     def _autocast(self):
         precision = self.config.training.mixed_precision
@@ -458,16 +485,24 @@ class Stage1Trainer:
                         f"{_metric_summary(result.metrics)}",
                         flush=True,
                     )
-                    self.save_checkpoint(self.run_dir / "last.pt")
+                    self.save_checkpoint(self.last_checkpoint_path)
 
             self.stage = "stage1b"
-            self.save_checkpoint(self.run_dir / "warmup_last.pt")
-            self.save_checkpoint(self.run_dir / "last.pt")
+            self.save_checkpoint(self.warmup_checkpoint_path)
+            self.save_checkpoint(self.last_checkpoint_path)
 
         start_round = self.current_round + 1
         for round_id in range(start_round, self.config.training.max_rounds + 1):
+            active_tasks: list[Task] = [
+                task
+                for task in ("phla", "ptcr")
+                if not self.stopped_tasks[task]
+            ]
+            if not active_tasks:
+                break
+
             train_results: dict[Task, EpochResult] = {}
-            for task in ("phla", "ptcr"):
+            for task in active_tasks:
                 train_results[task] = self.train_epoch(
                     task,
                     self.train_loaders[task],
@@ -477,89 +512,128 @@ class Stage1Trainer:
 
             val_metrics = {
                 task: self.evaluate(task, self.val_loaders[task])
-                for task in ("phla", "ptcr")
+                for task in active_tasks
             }
-            score = joint_score(val_metrics["phla"], val_metrics["ptcr"])
-            improved = (
-                score
-                > self.best_joint_score
-                + self.config.training.early_stopping_min_delta
-            )
-            if improved:
-                self.best_joint_score = score
-                self.best_val_metrics = {
-                    task: val_metrics[task].to_dict() for task in ("phla", "ptcr")
-                }
-                self.no_improve_rounds = 0
-            else:
-                self.no_improve_rounds += 1
+            scores: dict[Task, float] = {}
+            improved: dict[Task, bool] = {}
+            newly_stopped: list[Task] = []
+            for task in active_tasks:
+                scores[task] = task_score(val_metrics[task])
+                improved[task] = (
+                    scores[task]
+                    > self.best_task_scores[task]
+                    + self.config.training.early_stopping_min_delta
+                )
+                if improved[task]:
+                    self.best_task_scores[task] = scores[task]
+                    self.best_val_metrics[task] = val_metrics[task].to_dict()
+                    self.no_improve_rounds[task] = 0
+                else:
+                    self.no_improve_rounds[task] += 1
+                    if (
+                        self.no_improve_rounds[task]
+                        >= self.config.training.early_stopping_patience
+                    ):
+                        self.stopped_tasks[task] = True
+                        newly_stopped.append(task)
             self.current_round = round_id
 
             log_values: dict[str, Any] = {
                 "stage": "stage1b",
                 "round": round_id,
-                "joint_score": score,
-                "best_joint_score": self.best_joint_score,
-                "no_improve_rounds": self.no_improve_rounds,
-                "round/phla_optimizer_steps": train_results["phla"].optimizer_steps,
-                "round/ptcr_optimizer_steps": train_results["ptcr"].optimizer_steps,
-                "round/phla_to_ptcr_step_ratio": (
+                "round/phla_optimizer_steps": (
                     train_results["phla"].optimizer_steps
-                    / max(1, train_results["ptcr"].optimizer_steps)
+                    if "phla" in train_results
+                    else 0
+                ),
+                "round/ptcr_optimizer_steps": (
+                    train_results["ptcr"].optimizer_steps
+                    if "ptcr" in train_results
+                    else 0
+                ),
+                "round/phla_to_ptcr_step_ratio": (
+                    (
+                        train_results["phla"].optimizer_steps
+                        if "phla" in train_results
+                        else 0
+                    )
+                    / max(
+                        1,
+                        (
+                            train_results["ptcr"].optimizer_steps
+                            if "ptcr" in train_results
+                            else 0
+                        ),
+                    )
                 ),
             }
-            for task in ("phla", "ptcr"):
+            for task in active_tasks:
                 log_values.update(
                     train_results[task].to_log_dict(f"round/{task}/train")
                 )
                 log_values.update(prefixed_metrics(f"round/{task}/val", val_metrics[task]))
+                log_values[f"early_stopping/{task}/score"] = scores[task]
+                log_values[f"early_stopping/{task}/best_score"] = (
+                    self.best_task_scores[task]
+                )
+                log_values[f"early_stopping/{task}/no_improve_rounds"] = (
+                    self.no_improve_rounds[task]
+                )
+                log_values[f"early_stopping/{task}/stopped"] = int(
+                    self.stopped_tasks[task]
+                )
             self.tracker.log(log_values, step=self.global_step)
             print(
                 f"[Stage 1B][seed={self.config.training.seed}]"
                 f"[round={round_id}/{self.config.training.max_rounds}]"
                 f"[step={self.global_step}] "
-                f"joint={score:.4f} best={self.best_joint_score:.4f} "
-                f"improved={'yes' if improved else 'no'} "
-                f"patience={self.no_improve_rounds}/"
-                f"{self.config.training.early_stopping_patience}",
+                f"active={','.join(active_tasks)}",
                 flush=True,
             )
-            for task in ("phla", "ptcr"):
+            for task in active_tasks:
                 task_name = "pHLA" if task == "phla" else "pTCR"
                 print(
                     f"  {task_name} train: "
                     f"{_metric_summary(train_results[task].metrics)} | "
-                    f"val: {_metric_summary(val_metrics[task])}",
+                    f"val: {_metric_summary(val_metrics[task])} | "
+                    f"score={scores[task]:.4f} "
+                    f"best={self.best_task_scores[task]:.4f} "
+                    f"improved={'yes' if improved[task] else 'no'} "
+                    f"patience={self.no_improve_rounds[task]}/"
+                    f"{self.config.training.early_stopping_patience} "
+                    f"stopped={'yes' if self.stopped_tasks[task] else 'no'}",
                     flush=True,
                 )
 
-            self.save_checkpoint(self.run_dir / "last.pt")
-            if improved:
-                self.save_checkpoint(self.run_dir / "best_joint.pt")
-            if (
-                self.no_improve_rounds
-                >= self.config.training.early_stopping_patience
-            ):
+            self.save_checkpoint(self.last_checkpoint_path)
+            for task in active_tasks:
+                if improved[task]:
+                    self.save_best_task_checkpoint(task)
+            for task in newly_stopped:
+                task_name = "pHLA" if task == "phla" else "pTCR"
                 print(
-                    f"[Early stopping][seed={self.config.training.seed}] "
-                    f"round={round_id} best_joint={self.best_joint_score:.4f}",
+                    f"[Early stopping][seed={self.config.training.seed}]"
+                    f"[task={task_name}] round={round_id} "
+                    f"best_score={self.best_task_scores[task]:.4f}",
                     flush=True,
                 )
+            if all(self.stopped_tasks.values()):
                 break
 
         self.stage = "complete"
-        self.save_checkpoint(self.run_dir / "last.pt")
+        self.save_checkpoint(self.last_checkpoint_path)
         print(
             f"[Complete][seed={self.config.training.seed}] "
             f"round={self.current_round} step={self.global_step} "
-            f"best_joint={self.best_joint_score:.4f}",
+            f"best_pHLA={self.best_task_scores['phla']:.4f} "
+            f"best_pTCR={self.best_task_scores['ptcr']:.4f}",
             flush=True,
         )
         return self.summary()
 
     def checkpoint_state(self) -> dict[str, Any]:
         return {
-            "format_version": 1,
+            "format_version": 2,
             "model": self.model.state_dict(),
             "optimizer": self.optimizer.state_dict(),
             "scheduler": self.scheduler.state_dict(),
@@ -567,14 +641,16 @@ class Stage1Trainer:
             "stage": self.stage,
             "warmup_completed": dict(self.warmup_completed),
             "current_round": self.current_round,
-            "best_joint_score": self.best_joint_score,
+            "best_task_scores": dict(self.best_task_scores),
             "best_val_metrics": self.best_val_metrics,
-            "no_improve_rounds": self.no_improve_rounds,
+            "no_improve_rounds": dict(self.no_improve_rounds),
+            "stopped_tasks": dict(self.stopped_tasks),
             "global_step": self.global_step,
             "config": self.config.to_dict(),
             "data_filter_stats": self.data_filter_stats,
             "cache_metadata": self.cache_metadata,
             "input_mode": self.input_mode,
+            "run_timestamp": self.run_timestamp,
             "swanlab_run_id": self.tracker.run_id,
             "dataloader_rng_state": {
                 task: loader.generator.get_state()
@@ -585,15 +661,26 @@ class Stage1Trainer:
         }
 
     def save_checkpoint(self, path: str | Path) -> None:
-        target = Path(path)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        temporary = target.with_suffix(target.suffix + ".tmp")
-        torch.save(self.checkpoint_state(), temporary)
-        os.replace(temporary, target)
+        _atomic_torch_save(self.checkpoint_state(), path)
+
+    def save_best_task_checkpoint(self, task: Task) -> None:
+        """Save only the task whose own validation score just improved."""
+
+        training_state = self.checkpoint_state()
+        task_state = build_task_checkpoint_state(
+            training_state,
+            task,
+            source_checkpoint=self.last_checkpoint_path,
+        )
+        _atomic_torch_save(
+            task_state,
+            self.task_checkpoint_paths[task],
+        )
 
     def load_checkpoint(self, path: str | Path) -> None:
         checkpoint = load_training_checkpoint(path, map_location="cpu")
-        if checkpoint.get("format_version") != 1:
+        format_version = checkpoint.get("format_version")
+        if format_version not in {1, 2}:
             raise ValueError("Unsupported checkpoint format")
         checkpoint_config = checkpoint.get("config", {})
         if checkpoint.get("input_mode", "cache") != self.input_mode:
@@ -634,9 +721,31 @@ class Stage1Trainer:
             "ptcr": int(checkpoint["warmup_completed"]["ptcr"]),
         }
         self.current_round = int(checkpoint["current_round"])
-        self.best_joint_score = float(checkpoint["best_joint_score"])
         self.best_val_metrics = dict(checkpoint.get("best_val_metrics", {}))
-        self.no_improve_rounds = int(checkpoint["no_improve_rounds"])
+        if format_version == 2:
+            self.best_task_scores = {
+                task: float(checkpoint["best_task_scores"][task])
+                for task in ("phla", "ptcr")
+            }
+            self.no_improve_rounds = {
+                task: int(checkpoint["no_improve_rounds"][task])
+                for task in ("phla", "ptcr")
+            }
+            self.stopped_tasks = {
+                task: bool(checkpoint["stopped_tasks"][task])
+                for task in ("phla", "ptcr")
+            }
+        else:
+            self.best_task_scores = {
+                task: (
+                    task_score(self.best_val_metrics[task])
+                    if task in self.best_val_metrics
+                    else -float("inf")
+                )
+                for task in ("phla", "ptcr")
+            }
+            self.no_improve_rounds = {"phla": 0, "ptcr": 0}
+            self.stopped_tasks = {"phla": False, "ptcr": False}
         self.global_step = int(checkpoint["global_step"])
         for task, generator_state in checkpoint.get(
             "dataloader_rng_state", {}
@@ -653,11 +762,20 @@ class Stage1Trainer:
             "fold": self.config.training.fold,
             "seed": self.config.training.seed,
             "round": self.current_round,
-            "best_joint_score": self.best_joint_score,
+            "best_task_scores": dict(self.best_task_scores),
             "best_val_metrics": self.best_val_metrics,
+            "no_improve_rounds": dict(self.no_improve_rounds),
+            "stopped_tasks": dict(self.stopped_tasks),
             "data_filter_stats": self.data_filter_stats,
             "global_step": self.global_step,
+            "run_timestamp": self.run_timestamp,
             "run_dir": str(self.run_dir),
+            "last_checkpoint": str(self.last_checkpoint_path),
+            "warmup_checkpoint": str(self.warmup_checkpoint_path),
+            "task_checkpoints": {
+                task: str(path)
+                for task, path in self.task_checkpoint_paths.items()
+            },
         }
 
 
@@ -677,6 +795,94 @@ def load_training_checkpoint(
         return torch.load(path, map_location=map_location, weights_only=False)
     except TypeError:
         return torch.load(path, map_location=map_location)
+
+
+def build_task_checkpoint_state(
+    training_checkpoint: Mapping[str, Any],
+    task: Task,
+    *,
+    source_checkpoint: str | Path,
+) -> dict[str, Any]:
+    """Build a lean inference checkpoint containing exactly one task branch."""
+
+    if training_checkpoint.get("checkpoint_type") == "task_model":
+        raise ValueError("Expected a training checkpoint, got a task model")
+    model_state = training_checkpoint.get("model")
+    if not isinstance(model_state, Mapping):
+        raise ValueError("Training checkpoint does not contain a model state")
+    best_metrics = training_checkpoint.get("best_val_metrics", {})
+    best_task_scores = training_checkpoint.get("best_task_scores", {})
+    validation_metrics = best_metrics.get(task, {})
+    best_score = best_task_scores.get(task)
+    if best_score is None and validation_metrics:
+        best_score = task_score(validation_metrics)
+    no_improve = training_checkpoint.get("no_improve_rounds", {})
+    stopped = training_checkpoint.get("stopped_tasks", {})
+    return {
+        "format_version": 2,
+        "checkpoint_type": "task_model",
+        "task": task,
+        "model": extract_task_state_dict(model_state, task),
+        "config": training_checkpoint.get("config", {}),
+        "source_checkpoint": str(Path(source_checkpoint).resolve()),
+        "source_format_version": training_checkpoint.get("format_version"),
+        "stage": training_checkpoint.get("stage"),
+        "current_round": training_checkpoint.get("current_round"),
+        "global_step": training_checkpoint.get("global_step"),
+        "run_timestamp": training_checkpoint.get("run_timestamp"),
+        "best_score": best_score,
+        "validation_metrics": validation_metrics,
+        "early_stopping": {
+            "no_improve_rounds": (
+                no_improve.get(task) if isinstance(no_improve, Mapping) else None
+            ),
+            "stopped": stopped.get(task) if isinstance(stopped, Mapping) else None,
+        },
+        "data_filter_stats": training_checkpoint.get("data_filter_stats", {}),
+        "cache_metadata": training_checkpoint.get("cache_metadata", {}),
+        "input_mode": training_checkpoint.get("input_mode", "cache"),
+    }
+
+
+def export_task_checkpoints(
+    checkpoint_path: str | Path,
+    *,
+    output_dir: str | Path | None = None,
+    overwrite: bool = False,
+    artifact_timestamp: str | None = None,
+) -> dict[Task, Path]:
+    """Split a trusted legacy full checkpoint into pHLA and pTCR model files."""
+
+    source = Path(checkpoint_path).resolve()
+    checkpoint = load_training_checkpoint(source, map_location="cpu")
+    destination = Path(output_dir).resolve() if output_dir else source.parent
+    timestamp = validate_artifact_timestamp(
+        artifact_timestamp or create_artifact_timestamp()
+    )
+    targets = {
+        task: destination / timestamped_filename(filename, timestamp)
+        for task, filename in TASK_CHECKPOINT_FILENAMES.items()
+    }
+    existing = [path for path in targets.values() if path.exists()]
+    if existing and not overwrite:
+        names = ", ".join(str(path) for path in existing)
+        raise FileExistsError(f"Task checkpoint already exists: {names}")
+    for task, target in targets.items():
+        state = build_task_checkpoint_state(
+            checkpoint,
+            task,
+            source_checkpoint=source,
+        )
+        _atomic_torch_save(state, target)
+    return targets
+
+
+def _atomic_torch_save(state: Mapping[str, Any], path: str | Path) -> None:
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_suffix(target.suffix + ".tmp")
+    torch.save(dict(state), temporary)
+    os.replace(temporary, target)
 
 
 def _capture_rng_state() -> dict[str, Any]:

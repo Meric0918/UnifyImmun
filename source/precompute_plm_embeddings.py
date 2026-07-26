@@ -10,6 +10,7 @@ from pathlib import Path
 
 import torch
 
+from plm_unified.artifacts import create_artifact_timestamp, timestamped_filename
 from plm_unified.cache import build_embedding_cache
 from plm_unified.config import apply_overrides, load_config
 from plm_unified.data import collect_cache_sequences
@@ -50,6 +51,7 @@ def main() -> None:
     )
     config.validate(require_models=True)
     device = resolve_device(config.training.device)
+    artifact_timestamp = create_artifact_timestamp()
     cache_dir = config.cache_dir()
     cache_dir.mkdir(parents=True, exist_ok=True)
     sequences, filter_stats = collect_cache_sequences(
@@ -68,10 +70,14 @@ def main() -> None:
         )
     for entity in ("peptide", "hla", "tcr"):
         print(f"{entity}: {len(sequences[entity]):,} unique sequences")
-    (cache_dir / "filter_stats.json").write_text(
+    filter_stats_path = cache_dir / timestamped_filename(
+        "filter_stats.json", artifact_timestamp
+    )
+    filter_stats_path.write_text(
         json.dumps(filter_stats, indent=2, sort_keys=True),
         encoding="utf-8",
     )
+    print(f"Filter statistics written to: {filter_stats_path}")
 
     selected = set(args.entities)
     if selected.intersection({"peptide", "hla"}):

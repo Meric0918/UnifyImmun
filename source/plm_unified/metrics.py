@@ -79,6 +79,8 @@ def joint_score(
     phla_metrics: BinaryMetrics | Mapping[str, float],
     ptcr_metrics: BinaryMetrics | Mapping[str, float],
 ) -> float:
+    """Legacy reporting helper; training no longer uses it for early stopping."""
+
     def value(metrics, name: str) -> float:
         if isinstance(metrics, BinaryMetrics):
             return float(getattr(metrics, name))
@@ -90,6 +92,18 @@ def joint_score(
         + value(ptcr_metrics, "auroc")
         + value(ptcr_metrics, "aupr")
     ) / 4.0
+
+
+def task_score(metrics: BinaryMetrics | Mapping[str, float]) -> float:
+    """Threshold-independent score used for one task's early stopping."""
+
+    if isinstance(metrics, BinaryMetrics):
+        auroc = metrics.auroc
+        aupr = metrics.aupr
+    else:
+        auroc = metrics["auroc"]
+        aupr = metrics["aupr"]
+    return (float(auroc) + float(aupr)) / 2.0
 
 
 def prefixed_metrics(prefix: str, metrics: BinaryMetrics) -> dict[str, float | int]:

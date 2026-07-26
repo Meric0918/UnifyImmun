@@ -10,13 +10,13 @@ import torch.nn as nn
 
 from .config import ExperimentConfig
 from .metrics import BinaryMetrics, compute_binary_metrics
-from .model import Task, UnifiedBindingModel
+from .model import Task
 from .trainer import resolve_device
 
 
 @torch.inference_mode()
 def evaluate_model(
-    model: UnifiedBindingModel,
+    model: nn.Module,
     loader,
     task: Task,
     config: ExperimentConfig,
