@@ -1,4 +1,4 @@
-"""Typed configuration for the unified PLM stage-1 pipeline."""
+"""Typed configuration for the unified PLM stage-1/stage-2 pipelines."""
 
 from __future__ import annotations
 
@@ -79,6 +79,38 @@ class TrainingConfig:
 
 
 @dataclass
+class Stage2Config:
+    """Progressive top-layer fine-tuning from chapter 15."""
+
+    micro_batch_size: int = 8
+    eval_batch_size: int = 64
+    gradient_accumulation_steps: int = 16
+    stage2a_rounds: int = 2
+    stage2b_min_rounds: int = 5
+    stage2b_max_rounds: int = 20
+    early_stopping_patience: int = 5
+    early_stopping_min_delta: float = 1e-4
+    peptide_unfrozen_layers: int = 2
+    hla_unfrozen_layers: int = 1
+    tcr_unfrozen_layers: int = 2
+    peptide_top_lr: float = 1e-5
+    peptide_lower_lr: float = 5e-6
+    hla_top_lr: float = 1e-5
+    tcr_top_lr: float = 1e-5
+    tcr_lower_lr: float = 5e-6
+    adapter_lr: float = 5e-5
+    cross_attention_lr: float = 1e-4
+    pooling_lr: float = 1e-4
+    classifier_lr: float = 1e-4
+    weight_decay: float = 1e-2
+    scheduler_warmup_ratio: float = 0.05
+    gradient_clip_norm: float = 1.0
+    mixed_precision: str = "bf16"
+    gradient_checkpointing: bool = True
+    log_every_optimizer_steps: int = 1
+
+
+@dataclass
 class SwanLabConfig:
     project: str = "unifyimmun"
     workspace: Optional[str] = None
@@ -96,6 +128,7 @@ class ExperimentConfig:
     model: ModelConfig = field(default_factory=ModelConfig)
     cache: CacheConfig = field(default_factory=CacheConfig)
     training: TrainingConfig = field(default_factory=TrainingConfig)
+    stage2: Stage2Config = field(default_factory=Stage2Config)
     swanlab: SwanLabConfig = field(default_factory=SwanLabConfig)
     source_path: Optional[Path] = None
 
@@ -135,6 +168,50 @@ class ExperimentConfig:
             raise ValueError("fgm_epsilon must be positive")
         if self.training.mixed_precision not in {"none", "fp16", "bf16"}:
             raise ValueError("mixed_precision must be one of: none, fp16, bf16")
+        stage2 = self.stage2
+        for name in (
+            "micro_batch_size",
+            "eval_batch_size",
+            "gradient_accumulation_steps",
+            "stage2a_rounds",
+            "stage2b_min_rounds",
+            "stage2b_max_rounds",
+            "early_stopping_patience",
+            "peptide_unfrozen_layers",
+            "hla_unfrozen_layers",
+            "tcr_unfrozen_layers",
+            "log_every_optimizer_steps",
+        ):
+            if getattr(stage2, name) < 1:
+                raise ValueError(f"stage2.{name} must be positive")
+        if stage2.stage2b_min_rounds > stage2.stage2b_max_rounds:
+            raise ValueError(
+                "stage2.stage2b_min_rounds cannot exceed stage2.stage2b_max_rounds"
+            )
+        if not 0 <= stage2.scheduler_warmup_ratio < 1:
+            raise ValueError("stage2.scheduler_warmup_ratio must be in [0, 1)")
+        if stage2.early_stopping_min_delta < 0:
+            raise ValueError("stage2.early_stopping_min_delta cannot be negative")
+        for name in (
+            "peptide_top_lr",
+            "peptide_lower_lr",
+            "hla_top_lr",
+            "tcr_top_lr",
+            "tcr_lower_lr",
+            "adapter_lr",
+            "cross_attention_lr",
+            "pooling_lr",
+            "classifier_lr",
+            "gradient_clip_norm",
+        ):
+            if getattr(stage2, name) <= 0:
+                raise ValueError(f"stage2.{name} must be positive")
+        if stage2.weight_decay < 0:
+            raise ValueError("stage2.weight_decay cannot be negative")
+        if stage2.mixed_precision not in {"none", "fp16", "bf16"}:
+            raise ValueError(
+                "stage2.mixed_precision must be one of: none, fp16, bf16"
+            )
         if self.swanlab.mode not in {"online", "local", "offline", "disabled"}:
             raise ValueError(
                 "swanlab.mode must be one of: online, local, offline, disabled"
@@ -218,6 +295,7 @@ def load_config(path: str | Path) -> ExperimentConfig:
     model_values = _section(raw, "model", ModelConfig.__dataclass_fields__)
     cache_values = _section(raw, "cache", CacheConfig.__dataclass_fields__)
     training_values = _section(raw, "training", TrainingConfig.__dataclass_fields__)
+    stage2_values = _section(raw, "stage2", Stage2Config.__dataclass_fields__)
     swanlab_values = _section(raw, "swanlab", SwanLabConfig.__dataclass_fields__)
 
     config = ExperimentConfig(
@@ -225,6 +303,7 @@ def load_config(path: str | Path) -> ExperimentConfig:
         model=ModelConfig(**model_values),
         cache=CacheConfig(**cache_values),
         training=TrainingConfig(**training_values),
+        stage2=Stage2Config(**stage2_values),
         swanlab=SwanLabConfig(**swanlab_values),
         source_path=config_path,
     )

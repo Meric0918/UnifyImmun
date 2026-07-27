@@ -1,5 +1,10 @@
 # Install a CUDA-compatible PyTorch build for the server before this file.
 torch>=2.6
+# CUDA 12.4 / PyTorch 2.6 acceleration stack used by the unifyimmun env.
+# xformers must come from the official PyTorch cu124 wheel index.
+xformers==0.0.29.post2
+flash-attn==2.7.4.post1
+transformer-engine[pytorch]==1.13.0
 # ESM-C support is currently provided by Biohub's Transformers fork.
 transformers @ git+https://github.com/Biohub/transformers.git@3a8956fb4d4ea16b0ec8e71deef2c2909b6a5cbf
 safetensors>=0.4

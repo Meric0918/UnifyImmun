@@ -56,6 +56,16 @@ cross-attention branches, and module-targeted FGM.
 See [PLM_STAGE1.md](PLM_STAGE1.md) for checkpoint validation, cache construction,
 three-seed SwanLab experiments, resume, and evaluation commands.
 
+### ESM-C + TCR-BERT stage-2 fine-tuning
+
+Stage 2 loads a completed unified stage-1 `last` checkpoint, then progressively
+unfreezes the top Peptide/HLA ESM-C and TCR-BERT blocks with discriminative
+learning rates, gradient accumulation, and alternating pHLA/pTCR rounds.
+
+See [PLM_STAGE2.md](PLM_STAGE2.md) for the exact 2A/2B unfreezing schedule,
+dynamic learning rates, full-PLM checkpoint behavior, training, and resume
+commands.
+
 
 ### Model testing
 Given the fine-tuned model or our trained model (saved in trained_model folder), you can evaluate it on our demo test sets using the following scripts.

@@ -236,7 +236,7 @@ class OnlinePairDataset(Dataset):
         *,
         peptide_min_length: int = 8,
         peptide_max_length: int = 15,
-        limit: int,
+        limit: int | None = None,
     ):
         self.csv_path = Path(csv_path)
         self.task = task
@@ -256,7 +256,7 @@ class OnlinePairDataset(Dataset):
                     f"{self.csv_path} must contain columns: {sorted(required)}"
                 )
             for row_number, row in enumerate(reader, start=2):
-                if len(self.rows) >= limit:
+                if limit is not None and len(self.rows) >= limit:
                     break
                 self.filter_stats["total"] += 1
                 peptide = normalise_sequence(row[peptide_col])
@@ -356,7 +356,7 @@ def make_online_dataloader(
     pin_memory: bool,
     peptide_min_length: int,
     peptide_max_length: int,
-    limit: int,
+    limit: int | None = None,
 ) -> DataLoader:
     dataset = OnlinePairDataset(
         csv_path,

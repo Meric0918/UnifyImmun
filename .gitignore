@@ -54,3 +54,6 @@ data/
 # Model weights
 trained_model/
 embedding_cache/
+
+# html
+/home/mjp/Project/PLM/UnifyImmun/html

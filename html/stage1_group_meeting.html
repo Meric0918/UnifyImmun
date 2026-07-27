@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UnifyImmun · Unified PLM Stage 1 组会汇报</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root { --ink:#263445; --muted:#68778a; --paper:#faf8f5; --panel:#fffefd; --line:#e7e0d8; --blue:#4299e1; --violet:#667eea; --teal:#21a49a; --orange:#ed8a3a; --red:#dc6666; --soft-blue:#eaf5ff; --soft-violet:#eeefff; --soft-red:#fff0ee; --shadow:0 10px 28px rgba(55,65,81,.08); }
+    *{box-sizing:border-box} html{scroll-behavior:smooth} body{margin:0;background:var(--paper);color:var(--ink);font-family:'Noto Sans SC',-apple-system,BlinkMacSystemFont,sans-serif;line-height:1.65}
+    .container{max-width:1420px;margin:auto;padding:0 56px 52px}.hero{padding:62px 0 38px;text-align:center}.eyebrow{font-size:.86rem;letter-spacing:.13em;color:var(--violet);font-weight:800;text-transform:uppercase}.hero h1{font-size:clamp(2rem,4vw,3.35rem);line-height:1.22;margin:12px 0;color:#27364a}.hero p{margin:0 auto;max-width:820px;color:var(--muted);font-size:1.08rem}.tag-row{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:19px}.tag{padding:5px 12px;border-radius:99px;background:#fff;border:1px solid var(--line);font-size:.83rem;color:#526174}.tag.accent{background:var(--soft-violet);border-color:#d9dcff;color:#4f62cc;font-weight:700}
+    section{margin:28px 0 56px}.section-head{display:flex;align-items:baseline;gap:14px;margin-bottom:17px}.num{font-family:'JetBrains Mono',monospace;font-size:.82rem;color:var(--violet);font-weight:700}.section-head h2{margin:0;font-size:1.7rem;font-weight:700}.section-head p{margin:0;color:var(--muted);font-size:.94rem}.grid{display:grid;gap:20px}.kpis{grid-template-columns:repeat(4,1fr)}.two{grid-template-columns:1.02fr .98fr}.three{grid-template-columns:repeat(3,1fr)}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px;box-shadow:var(--shadow);animation:fade .55s ease both}.card:nth-child(2){animation-delay:.08s}.card:nth-child(3){animation-delay:.16s}.card:nth-child(4){animation-delay:.24s}@keyframes fade{from{opacity:0;transform:translateY(13px)}to{opacity:1;transform:translateY(0)}}
+    .kpi-label{color:var(--muted);font-size:.87rem}.kpi-value{font-size:2.05rem;line-height:1.25;font-weight:800;margin:8px 0 3px;color:#314361}.kpi-note{font-size:.83rem;color:var(--muted)}.positive{color:var(--teal)}.warn{color:var(--orange)}.danger{color:var(--red)}
+    .architecture{display:grid;grid-template-columns:1fr 30px 1.2fr 30px 1.1fr;align-items:center;gap:8px}.arch-column{display:grid;gap:11px}.arch-box{border:1px solid #dce2ec;background:#fff;border-radius:12px;padding:15px 14px;min-height:74px}.arch-box strong{display:block;font-size:.95rem}.arch-box span{color:var(--muted);font-size:.79rem;line-height:1.45;display:block;margin-top:4px}.arch-box.blue{border-color:#b9dffe;background:var(--soft-blue)}.arch-box.violet{border-color:#d4d7fa;background:var(--soft-violet)}.arch-box.teal{border-color:#bfe6df;background:#edfbf8}.arrow{text-align:center;color:var(--violet);font-size:1.5rem;font-weight:bold}.arch-note{margin-top:15px;padding:13px 15px;background:#f8f6f2;border-radius:10px;font-size:.88rem;color:#59687a}.training-flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:9px;margin-top:15px}.flow{flex:1;min-width:142px;border-radius:10px;padding:12px;background:#f6f8fc;border:1px solid #dfe6f0;font-size:.84rem}.flow b{display:block;color:#3d4d67;margin-bottom:3px}.flow-arrow{align-self:center;color:var(--violet)}
+    .chart-wrap{height:330px;position:relative}.chart-wrap.tall{height:360px}.caption{font-size:.81rem;color:var(--muted);margin:9px 0 0}.chart-analysis{margin:12px 0 0;padding:11px 13px;border-radius:9px;background:#f7f9fc;border-left:3px solid var(--blue);font-size:.87rem;color:#4f6074}.chart-analysis b{color:#344865}.callout{border-left:4px solid var(--violet);background:var(--soft-violet);padding:15px 17px;border-radius:0 10px 10px 0;margin-top:16px;font-size:.93rem}.callout.warning{border-color:var(--orange);background:#fff7ed}.callout strong{color:#384b82}
+    table{border-collapse:collapse;width:100%;font-size:.88rem;background:#fff} .table-shell{border:1px solid var(--line);border-radius:15px;overflow:auto;box-shadow:var(--shadow)}th{background:linear-gradient(135deg,#667eea,#5799df);color:white;padding:12px 13px;text-align:right;white-space:nowrap;font-weight:600}th:first-child,td:first-child{text-align:left}td{padding:11px 13px;border-bottom:1px solid #eee9e3;text-align:right;white-space:nowrap}tbody tr:last-child td{border-bottom:0}tbody tr:hover{background:#f8fbff}.dataset{font-weight:700}.delta-up{color:#087f73;font-weight:700}.delta-down{color:#c15757;font-weight:700}.badge{padding:3px 8px;border-radius:99px;font-size:.76rem;font-weight:700}.badge.good{background:#dcf6f1;color:#087f73}.badge.bad{background:#ffe7e3;color:#b94a4a}.badge.neutral{background:#eef0ff;color:#5364c5}
+    .insights{padding-left:20px;margin:5px 0}.insights li{margin:10px 0}.split-note{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:15px}.mini{background:#fafbfe;border:1px solid #e4e8f0;padding:14px;border-radius:10px}.mini b{display:block;color:#43526a}.mini span{font-size:.86rem;color:var(--muted)}.footer{text-align:center;color:#8a96a3;font-size:.78rem;padding:18px 0 0;border-top:1px solid var(--line)}
+    @media(max-width:1000px){.container{padding:0 28px 35px}.kpis,.two,.three{grid-template-columns:repeat(2,1fr)}.architecture{grid-template-columns:1fr;gap:5px}.arrow{transform:rotate(90deg)}.arch-column{grid-template-columns:repeat(3,1fr)}.split-note{grid-template-columns:1fr}}
+    @media(max-width:650px){.container{padding:0 17px 24px}.hero{padding:38px 0 25px}.kpis,.two,.three,.arch-column{grid-template-columns:1fr}.section-head{display:block}.section-head p{margin-top:5px}.card{padding:18px}.chart-wrap{height:280px}table{font-size:.78rem}th,td{padding:9px}.flow-arrow{display:none}}
+    @media print{body{background:#fff}.container{max-width:none;padding:0 22px}.hero{padding:24px 0}.card,.table-shell{box-shadow:none;break-inside:avoid}section{margin:20px 0 30px}.chart-wrap{height:260px}.footer{position:fixed;bottom:0;left:0;right:0;background:#fff}.tag{background:#fff}}
+  </style>
+</head>
+<body>
+<main class="container">
+  <header class="hero">
+    <div class="eyebrow">UnifyImmun · Group Meeting</div>
+    <h1>Unified PLM Stage 1：结构与外部测试评估</h1>
+    <p>聚焦 pTCR 分支；以跨三类外部测试集的综合表现选择 Fold 4 / Seed 2026，与既有 baseline 对照。</p>
+    <div class="tag-row"><span class="tag accent">选中：Fold 4 · Seed 2026</span><span class="tag">模型选择：三测试集宏平均 Score</span><span class="tag">Score = (AUROC + AUPR) / 2</span><span class="tag">阈值：0.5</span></div>
+  </header>
+
+  <section>
+    <div class="section-head"><span class="num">01</span><h2>结论先行</h2><p>最优跨域候选优于 baseline 的范围与边界</p></div>
+    <div class="grid kpis">
+      <article class="card"><div class="kpi-label">跨域宏平均 Score</div><div class="kpi-value positive">0.7876</div><div class="kpi-note">10 个 fold/seed 组合中最高</div></article>
+      <article class="card"><div class="kpi-label">最差域 Score（COVID）</div><div class="kpi-value warn">0.6088</div><div class="kpi-note">10 次运行中最高，但绝对性能仍有限</div></article>
+      <article class="card"><div class="kpi-label">Independent Score</div><div class="kpi-value positive">0.9311</div><div class="kpi-note">baseline 0.9184，提升 0.0127</div></article>
+      <article class="card"><div class="kpi-label">COVID F1</div><div class="kpi-value positive">0.4430</div><div class="kpi-note">baseline 0.3947，提升 0.0483</div></article>
+    </div>
+    <div class="callout"><strong>核心判断：</strong>Stage 1 在 independent 集上稳定且超过 baseline；选中模型在 COVID 的固定阈值指标也更好。triple 集则仍落后于 baseline，且 COVID 的排序能力仅略高于随机，域外泛化和校准是当前主要瓶颈。</div>
+  </section>
+
+  <section>
+    <div class="section-head"><span class="num">02</span><h2>Stage 1 模型结构</h2><p>冻结预训练编码器 + 轻量 Adapter + 任务专属交互与分类头</p></div>
+    <article class="card">
+      <div class="architecture">
+        <div class="arch-column"><div class="arch-box blue"><strong>Peptide</strong><span>ESM-C 300M · hidden 960</span></div><div class="arch-box blue"><strong>HLA pseudo-sequence</strong><span>现有 33/34 位序列 · ESM-C 300M</span></div><div class="arch-box blue"><strong>TCR</strong><span>TCR-BERT · hidden 768</span></div></div>
+        <div class="arrow">→</div>
+        <div class="arch-column"><div class="arch-box violet"><strong>Peptide Adapter（共享）</strong><span>服务 pHLA 与 pTCR 两个任务</span></div><div class="arch-box violet"><strong>HLA Adapter（独立）</strong><span>仅 pHLA 分支</span></div><div class="arch-box violet"><strong>TCR Adapter（独立）</strong><span>仅 pTCR 分支</span></div></div>
+        <div class="arrow">→</div>
+        <div class="arch-column"><div class="arch-box teal"><strong>pHLA 分支</strong><span>4-head cross-attention → masked pooling → 分类头</span></div><div class="arch-box teal"><strong>pTCR 分支</strong><span>4-head cross-attention → masked pooling → 分类头</span></div></div>
+      </div>
+      <div class="arch-note">训练时冻结 ESM-C / TCR-BERT 的残基级 FP16 嵌入缓存，仅学习 Adapter、cross-attention、pooling 和分类头；推理可导出独立 <code>best_ptcr.pt</code>，与联合模型 pTCR 分支数学等价。</div>
+      <div class="training-flow"><div class="flow"><b>1A Warm-up</b>不使用 FGM 预热</div><span class="flow-arrow">→</span><div class="flow"><b>1B 交替训练</b>pHLA / pTCR 按 epoch 交替</div><span class="flow-arrow">→</span><div class="flow"><b>任务内 FGM</b>只扰动当前任务的 Peptide + receptor Adapter</div><span class="flow-arrow">→</span><div class="flow"><b>独立早停与选模</b>各任务按 (AUROC + AUPR) / 2；patience = 3</div></div>
+    </article>
+  </section>
+
+  <section>
+    <div class="section-head"><span class="num">03</span><h2>Single-head vs Two-head</h2><p>Fold 1、三个 seed 的均值 ± SD；两种导出/推理形式的 pTCR 表现对照</p></div>
+    <div class="grid two"><article class="card"><div class="chart-wrap"><canvas id="headScoreChart"></canvas></div><p class="caption">Score = (AUROC + AUPR) / 2。COVID 复用数学等价的联合模型 pTCR 分支；independent/triple 的在线编码验证差异仅为浮点累积误差范围。</p><p class="chart-analysis"><b>图表解读：</b>两条柱在三个测试集上几乎重合。single-head 在 triple 上仅高 0.0036；这种量级小于该测试集的 seed 间波动，因此不能据此宣称某一种 head 形式具有稳定优势。</p></article><article class="card"><h3 style="margin-top:0">对照结论</h3><ul class="insights"><li><b>Independent：</b>两种形式几乎完全一致；two-head Score 0.9305，single-head 为 0.9306。</li><li><b>Triple：</b>single-head Score 0.8277，略高于 two-head 的 0.8241（差 0.0036），远小于 seed 间波动。</li><li><b>COVID：</b>两者汇总值完全相同（Score 0.5721），因为对应权重与 pTCR 分支评测结果一致。</li><li><b>解释：</b>two-head 的 <code>best_ptcr.pt</code> 可作为独立任务模型使用，未观察到实质性能损失。</li></ul><div class="callout"><strong>注意：</strong>此处的“single-head / two-head”是同一训练权重的两种推理组织与评测方式对比，不是两种独立训练策略的公平胜负。</div></article></div>
+    <div class="table-shell"><table><thead><tr><th>测试集</th><th>形式</th><th>AUROC</th><th>AUPR</th><th>Score</th><th>Accuracy</th><th>MCC</th><th>F1</th></tr></thead><tbody>
+      <tr><td class="dataset">independent</td><td>single-head</td><td>0.9492 ± 0.0004</td><td>0.9120 ± 0.0006</td><td>0.9306</td><td>0.8877</td><td>0.7520</td><td>0.8379</td></tr>
+      <tr><td class="dataset">independent</td><td>two-head</td><td>0.9493 ± 0.0003</td><td>0.9118 ± 0.0003</td><td>0.9305</td><td>0.8876</td><td>0.7522</td><td>0.8383</td></tr>
+      <tr><td class="dataset">triple</td><td>single-head</td><td>0.8382 ± 0.0240</td><td>0.8172 ± 0.0152</td><td>0.8277</td><td>0.7802</td><td>0.5346</td><td>0.6547</td></tr>
+      <tr><td class="dataset">triple</td><td>two-head</td><td>0.8347 ± 0.0231</td><td>0.8136 ± 0.0156</td><td>0.8241</td><td>0.7796</td><td>0.5329</td><td>0.6540</td></tr>
+      <tr><td class="dataset">covid</td><td>single-head / two-head</td><td>0.5696 ± 0.0437</td><td>0.5747 ± 0.0227</td><td>0.5721</td><td>0.5442</td><td>0.1119</td><td>0.3638</td></tr>
+    </tbody></table></div>
+  </section>
+
+  <section>
+    <div class="section-head"><span class="num">04</span><h2>Fold / Seed 稳定性与候选选择</h2><p>5 folds × 2 seeds（42、2026）的跨域表现；Seed 3407 仅有 Fold 1 结果，未纳入多 fold 选择</p></div>
+    <div class="grid two"><article class="card"><div class="chart-wrap"><canvas id="robustChart"></canvas></div><p class="caption">三个指标均为 10 个单次运行的跨域汇总。宏平均避免 108.9 万条 COVID 样本在样本量加权下主导结论。</p><p class="chart-analysis"><b>图表解读：</b>Fold 4 / Seed 2026 同时取得最高宏平均 Score（0.7876）与最高最差域 Score（0.6088），说明其优势并非仅由 independent 域驱动。不同组合的主要差异来自 COVID 与 triple；independent 在各 run 间几乎不变。</p></article><article class="card"><h3 style="margin-top:0">候选的选择规则</h3><ul class="insights"><li><b>宏平均 Score：</b>0.7876，为全部组合最高。</li><li><b>宏平均 MCC / F1：</b>0.4951 / 0.6469，均为最高。</li><li><b>最差域 Score：</b>0.6088，为全部组合最高，来自 COVID。</li><li><b>取舍：</b>它不是 independent（Fold 3 / Seed 42）或 triple 排序（Fold 2 / Seed 2026）的单域最佳，而是总体最稳健的单模型候选。</li></ul><div class="callout warning"><strong>统计边界：</strong>这是在同一批测试集上完成的事后模型选择；这些测试分数可用于候选筛选，但不应再当作该候选的无偏泛化估计。部署前需额外留出集复核。</div></article></div>
+    <div class="table-shell"><table><thead><tr><th>测试集</th><th>Seed 42（5 folds）</th><th>Seed 2026（5 folds）</th><th>2026 − 42</th><th>解读</th></tr></thead><tbody>
+      <tr><td class="dataset">independent Score</td><td>0.9315 ± 0.0009</td><td>0.9301 ± 0.0004</td><td class="delta-down">−0.0014</td><td>Seed 42 在 5/5 folds 略优，绝对差很小</td></tr>
+      <tr><td class="dataset">triple Score</td><td>0.8218 ± 0.0084</td><td>0.8365 ± 0.0094</td><td class="delta-up">+0.0147</td><td>Seed 2026 在 4/5 folds 更强，但 F1/MCC 未同步提高</td></tr>
+      <tr><td class="dataset">covid Score</td><td>0.5814 ± 0.0174</td><td>0.5825 ± 0.0226</td><td class="delta-up">+0.0012</td><td>排序提升极小；2026 的 F1/MCC 较高但 loss 更差</td></tr>
+    </tbody></table></div>
+  </section>
+
+  <section>
+    <div class="section-head"><span class="num">05</span><h2>最优候选 vs baseline</h2><p>相同三类 pTCR 外部测试集；PLM 为 Fold 4 / Seed 2026</p></div>
+    <div class="grid two"><article class="card"><div class="chart-wrap tall"><canvas id="scoreChart"></canvas></div><p class="caption">排序能力：Score = (AUROC + AUPR) / 2。Independent 提升；triple 与 COVID 仍低于 baseline。</p><p class="chart-analysis"><b>图表解读：</b>PLM 只在 independent 上超过 baseline（Score +0.0118）。triple 的差距最大（−0.0566），COVID 也低 0.0211；因此当前不能以“整体排序能力超过 baseline”概括 Stage 1。</p></article><article class="card"><div class="chart-wrap tall"><canvas id="f1Chart"></canvas></div><p class="caption">固定阈值分类：COVID 的 MCC 和 F1 反而优于 baseline，提示该候选在阈值 0.5 下获得了更多正类识别。</p><p class="chart-analysis"><b>图表解读：</b>阈值 0.5 下，PLM 在 independent 的 MCC/F1 均提升，在 COVID 的 F1 提升 0.0483；但 triple 的 MCC/F1 明显下降。排序指标与固定阈值指标的分歧，提示应在验证集上重新确定阈值并检查校准。</p></article></div>
+    <div class="table-shell"><table><thead><tr><th>测试集</th><th>模型</th><th>AUROC</th><th>AUPR</th><th>Score</th><th>Accuracy</th><th>MCC</th><th>F1</th></tr></thead><tbody>
+      <tr><td class="dataset">independent</td><td>Baseline</td><td>0.9400</td><td>0.8969</td><td>0.9184</td><td>0.8748</td><td>0.7254</td><td>0.8220</td></tr>
+      <tr><td class="dataset">independent</td><td><span class="badge good">PLM F4/S2026</span></td><td class="delta-up">0.9483 (+0.0083)</td><td class="delta-up">0.9120 (+0.0151)</td><td class="delta-up">0.9302 (+0.0118)</td><td class="delta-up">0.8883 (+0.0135)</td><td class="delta-up">0.7536 (+0.0282)</td><td class="delta-up">0.8391 (+0.0171)</td></tr>
+      <tr><td class="dataset">triple</td><td>Baseline</td><td>0.8828</td><td>0.8778</td><td>0.8803</td><td>0.8602</td><td>0.7048</td><td>0.8020</td></tr>
+      <tr><td class="dataset">triple</td><td><span class="badge bad">PLM F4/S2026</span></td><td class="delta-down">0.8346 (−0.0482)</td><td class="delta-down">0.8128 (−0.0650)</td><td class="delta-down">0.8237 (−0.0566)</td><td class="delta-down">0.7842 (−0.0760)</td><td class="delta-down">0.5451 (−0.1597)</td><td class="delta-down">0.6587 (−0.1433)</td></tr>
+      <tr><td class="dataset">covid</td><td>Baseline</td><td>0.6331</td><td>0.6270</td><td>0.6300</td><td>0.5703</td><td>0.1776</td><td>0.3947</td></tr>
+      <tr><td class="dataset">covid</td><td><span class="badge neutral">PLM F4/S2026</span></td><td class="delta-down">0.6077 (−0.0254)</td><td class="delta-down">0.6100 (−0.0170)</td><td class="delta-down">0.6088 (−0.0211)</td><td class="delta-up">0.5796 (+0.0093)</td><td class="delta-up">0.1866 (+0.0090)</td><td class="delta-up">0.4430 (+0.0483)</td></tr>
+    </tbody></table></div>
+  </section>
+
+  <section>
+    <div class="section-head"><span class="num">06</span><h2>外部泛化：优势与短板</h2><p>同一候选在三个数据域的性能梯度</p></div>
+    <div class="grid two"><article class="card"><div class="chart-wrap"><canvas id="domainChart"></canvas></div><p class="caption">AUROC 与 AUPR 从 independent 到 triple、COVID 递减；COVID AUPR 仅比其约 50.3% 的正类比例高 0.1072。</p><p class="chart-analysis"><b>图表解读：</b>从 independent 到 triple，模型仍保有可用的排序能力，但跨至 COVID 后 AUROC 降至 0.6077，AUPR 接近数据集阳性比例。该趋势支持“明显域偏移”而非单纯随机波动的解释。</p></article><article class="card"><h3 style="margin-top:0">测试集与解释</h3><div class="split-note"><div class="mini"><b>Independent</b><span>28,707 样本；表现强且在所有 fold/seed 上最稳定。选中模型 Score 0.9302。</span></div><div class="mini"><b>Triple</b><span>96,799 有效样本；244 条因肽长度不在 8–15 被过滤。模型特异性 0.9452，但 Recall 仅 0.5330。</span></div><div class="mini"><b>COVID</b><span>1,089,310 样本；选中候选为所有运行最优，但 AUROC 0.6077、loss 1.1109，仍存在显著域外退化。</span></div></div><ul class="insights"><li><b>阈值偏保守：</b>triple 和 COVID 都表现为高 precision / specificity、低 recall；阈值应只在独立验证集上重选，不能在测试集调参。</li><li><b>可能校准失效：</b>COVID loss 高而 AUROC 略高于随机，建议保存逐样本概率并分析 reliability curve、ECE、Brier score。</li></ul></article></div>
+  </section>
+
+  <section>
+    <div class="section-head"><span class="num">07</span><h2>结论与下一步</h2><p>从结果回推下一轮实验重点</p></div>
+    <div class="grid three"><article class="card"><h3 style="margin-top:0;color:#4e61c3">已确认</h3><ul class="insights"><li>轻量可训练模块可将冻结 PLM 用于统一 pHLA / pTCR 框架。</li><li>pTCR 在 independent 上稳定超过 baseline。</li><li><code>best_ptcr.pt</code> 与联合模型分支等价，可独立部署推理。</li></ul></article><article class="card"><h3 style="margin-top:0;color:#c8752e">待解决</h3><ul class="insights"><li>triple 相对 baseline 仍有明显差距。</li><li>COVID 排序能力与概率质量不足，且对 fold / seed 更敏感。</li><li>固定阈值 0.5 下的召回偏低。</li></ul></article><article class="card"><h3 style="margin-top:0;color:#14877d">建议优先级</h3><ol class="insights"><li>在验证集完成阈值选择与概率校准评估。</li><li>增加跨域、多样化 TCR 训练数据；评估 few-shot 适配。</li><li>以独立留出域验证 Fold 4 / Seed 2026 的选择结果。</li></ol></article></div>
+  </section>
+  <footer class="footer">数据来源：PLM_STAGE1.md · Fold 1 single/two-head 汇总 · PLM pTCR 多 Fold（Seeds 42/2026）分析 · baseline.md ｜生成日期：2026-07-27</footer>
+</main>
+<script>
+  const common={responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{family:"Noto Sans SC"},boxWidth:14}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.y.toFixed(4)}`}}},scales:{y:{beginAtZero:true,max:1,ticks:{callback:v=>v.toFixed(1)},grid:{color:'#ece8e2'}},x:{grid:{display:false}}}};
+  new Chart(document.getElementById('headScoreChart'),{type:'bar',data:{labels:['Independent','Triple','COVID'],datasets:[{label:'single-head Score',data:[.930596,.827675,.572118],backgroundColor:'#4299e1',borderRadius:7},{label:'two-head Score',data:[.930529,.824146,.572118],backgroundColor:'#667eea',borderRadius:7}]},options:common});
+  new Chart(document.getElementById('robustChart'),{type:'bar',data:{labels:['Fold 1/42','Fold 1/2026','Fold 2/42','Fold 2/2026','Fold 3/42','Fold 3/2026','Fold 4/42','Fold 4/2026','Fold 5/42','Fold 5/2026'],datasets:[{label:'三测试集宏平均 Score',data:[.7741,.7733,.7694,.7846,.7790,.7843,.7832,.7876,.7854,.7854],backgroundColor:['#aab8d1','#aab8d1','#aab8d1','#aab8d1','#aab8d1','#aab8d1','#aab8d1','#667eea','#aab8d1','#aab8d1'],borderRadius:5},{label:'最差测试集 Score',data:[.5625,.5487,.5620,.5766,.5933,.5834,.5943,.6088,.5947,.5952],backgroundColor:['#d6e7f6','#d6e7f6','#d6e7f6','#d6e7f6','#d6e7f6','#d6e7f6','#d6e7f6','#4299e1','#d6e7f6','#d6e7f6'],borderRadius:5}]},options:{...common,scales:{...common.scales,x:{...common.scales.x,ticks:{maxRotation:60,minRotation:60,font:{size:10}}},y:{...common.scales.y,min:.5,max:.85}}}});
+  new Chart(document.getElementById('scoreChart'),{type:'bar',data:{labels:['Independent','Triple','COVID'],datasets:[{label:'Baseline Score',data:[.9184,.8803,.6300],backgroundColor:'#a7b2c4',borderRadius:7},{label:'PLM F4/S2026 Score',data:[.9302,.8237,.6088],backgroundColor:'#667eea',borderRadius:7}]},options:common});
+  new Chart(document.getElementById('f1Chart'),{type:'bar',data:{labels:['Independent MCC','Independent F1','Triple MCC','Triple F1','COVID MCC','COVID F1'],datasets:[{label:'Baseline',data:[.7254,.8220,.7048,.8020,.1776,.3947],backgroundColor:'#a7b2c4',borderRadius:6},{label:'PLM F4/S2026',data:[.7536,.8391,.5451,.6587,.1866,.4430],backgroundColor:['#21a49a','#21a49a','#ed8a3a','#ed8a3a','#21a49a','#21a49a'],borderRadius:6}]},options:common});
+  new Chart(document.getElementById('domainChart'),{type:'line',data:{labels:['Independent','Triple','COVID'],datasets:[{label:'AUROC',data:[.9483,.8346,.6077],borderColor:'#667eea',backgroundColor:'rgba(102,126,234,.15)',fill:true,tension:.28,pointRadius:5},{label:'AUPR',data:[.9120,.8128,.6100],borderColor:'#21a49a',backgroundColor:'rgba(33,164,154,.08)',fill:true,tension:.28,pointRadius:5},{label:'随机 AUPR 基线（正类比例）',data:[.3490,.3906,.5028],borderColor:'#ed8a3a',borderDash:[6,5],pointRadius:3,tension:.1}]},options:common});
+</script>
+</body>
+</html>

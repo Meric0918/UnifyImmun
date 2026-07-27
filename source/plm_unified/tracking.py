@@ -42,14 +42,21 @@ class SwanLabTracker:
             f"-fold{config.training.fold}-seed{config.training.seed}"
             f"-{self.run_timestamp}"
         )
+        if "stage2" in config.swanlab.experiment_prefix.lower():
+            description = (
+                "Unified ESM-C/TCR-BERT progressive stage-2 fine-tuning with "
+                "alternating pHLA/pTCR training and task-specific checkpoints."
+            )
+        else:
+            description = (
+                "Unified ESM-C/TCR-BERT stage-1 training with shared Peptide "
+                "Adapter and module-targeted FGM."
+            )
         init_kwargs: dict[str, Any] = {
             "project": config.swanlab.project,
             "workspace": config.swanlab.workspace,
             "experiment_name": experiment_name,
-            "description": (
-                "Unified ESM-C/TCR-BERT stage-1 training with shared Peptide "
-                "Adapter and module-targeted FGM."
-            ),
+            "description": description,
             "job_type": "train",
             "group": group,
             "tags": config.swanlab.tags,
